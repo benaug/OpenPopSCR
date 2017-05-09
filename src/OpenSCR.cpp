@@ -244,6 +244,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }
   }
   //  Detection function
+  // if(obstype==1){
   for(int l=0; l<t; l++){
     likcurr2D(l)=0;
     for(int i=0; i<M; i++) {
@@ -257,6 +258,20 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }
     llysum+=likcurr2D(l); //full likelihood sum
   }
+  // }else{
+  //   for(int l=0; l<t; l++){
+  //     likcurr2D(l)=0;
+  //     for(int i=0; i<M; i++) {
+  //       for(int j=0; j<Xidx(l); j++){
+  //         ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(K(l)-y(i,j,l))*log(1-pd(i,j,l)));
+  //         if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+  //           likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+  //         }
+  //       }
+  //     }
+  //     llysum+=likcurr2D(l); //full likelihood sum
+  //   }
+  // }
   //ll.z. Some Ez are so small we're close to log(0) which is NaN in Rcpp
   for(int i=0; i<M; i++){//z1
     ll_z(i,0)= z(i,0)*log(psi)+(1-z(i,0))*log(1-psi);

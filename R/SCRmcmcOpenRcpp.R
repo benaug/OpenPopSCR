@@ -5,6 +5,10 @@ SCRmcmcOpenRcpp <-
     t=dim(data$y)[3]
     y<-data$y
     X<-data$X
+    #make sure X list elements are matrices
+    for(i in 1:length(X)){
+      X[[i]]=as.matrix(X[[i]])
+    }
     J<-data$J
     maxJ=max(J)
     K<-data$K
@@ -289,9 +293,15 @@ SCRmcmcOpenRcpp <-
       }
     }
     #Calculate ll for observation model so we can check for -Inf values
-    pd=pd.cand=1-exp(-lamd)
-    for(l in 1:t){
-      ll.y[,,l]= dbinom(y[,,l],K[l],pd[,,l]*z[,l],log=TRUE)
+    if(obstype=="bernoulli"){
+      pd=pd.cand=1-exp(-lamd)
+      for(l in 1:t){
+        ll.y[,,l]= dbinom(y[,,l],K[l],pd[,,l]*z[,l],log=TRUE)
+      }
+    }else if(obstype=="poisson"){
+      ll.y[,,l]= dpois(y[,,l],K[l]*lamd[,,l]*z[,l],log=TRUE)
+    }else{
+      stop("obstype must be 'bernoulli' or 'poisson'")
     }
     ll.y.cand=ll.y
     ll.y.t.sum=ll.y.cand.t.sum=apply(ll.y,3,sum) #ll summed for each year
@@ -369,6 +379,11 @@ SCRmcmcOpenRcpp <-
       ACtype=4#independent
     }else{#metamu2
       ACtype=5
+    }
+    if(obstype=="bernoulli"){
+      obstype2=1
+    }else{
+      obstype2=2
     }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
