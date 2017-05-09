@@ -36,6 +36,25 @@ SCRmcmcOpenRcpp <-
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
     }
+    if("tf"%in%names(data)){
+      tf=data$tf
+      if(length(tf)!=length(X)){
+        stop("If using a trap operation file, must input one for each year")
+      }
+      for(i in 1:length(X)){
+        if(is.matrix(tf[[i]])){
+          stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
+        }
+        if(nrow(X[[i]])!=length(tf[[i]])){
+          stop("If using trap operation file, must enter operation for every trap")
+        }
+      }
+    }else{
+      tf=vector("list",t)
+      for(l in 1:t){
+        tf[[l]]=rep(K[l],nrow(X[[i]]))
+      }
+    }
     ##pull out initial values
     # psi<- inits$psi
     lam0<- inits$lam0
@@ -296,11 +315,11 @@ SCRmcmcOpenRcpp <-
     if(obstype=="bernoulli"){
       pd=pd.cand=1-exp(-lamd)
       for(l in 1:t){
-        ll.y[,,l]= dbinom(y[,,l],K[l],pd[,,l]*z[,l],log=TRUE)
+        ll.y[,,l]= dbinom(y[,,l],tf[[l]],pd[,,l]*z[,l],log=TRUE)
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
-        ll.y[,,l]= dpois(y[,,l],K[l]*lamd[,,l]*z[,l],log=TRUE)
+        ll.y[,,l]= dpois(y[,,l],tf[[l]]*lamd[,,l]*z[,l],log=TRUE)
       }
     }else{
       stop("obstype must be 'bernoulli' or 'poisson'")
@@ -387,12 +406,16 @@ SCRmcmcOpenRcpp <-
     }else{
       obstype2=2
     }
+    tf2=matrix(NA,nrow=maxJ,ncol=t)
+    for(l in 1:t){
+      tf2[1:J[l],l]=tf[[l]]
+    }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
                     ACtype, useverts, vertices, xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
-                    zpossible,apossible,cancel,obstype2)
+                    zpossible,apossible,cancel,obstype2,tf2)
 
     out=store[[1]]
     s1xout=store[[2]]

@@ -78,7 +78,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel,int obstype) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerVector tf) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -250,7 +250,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       for(int i=0; i<M; i++) {
         for(int j=0; j<Xidx(l); j++){
           pd(i,j,l)=1-exp(-lamd(i,j,l));
-          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(K(l)-y(i,j,l))*log(1-pd(i,j,l)));
+          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
           if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
             likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
           }
@@ -263,7 +263,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       likcurr2D(l)=0;
       for(int i=0; i<M; i++) {
         for(int j=0; j<Xidx(l); j++){
-          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamd(i,j,l))-K(l)*lamd(i,j,l));
+          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
           if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
             likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
           }
@@ -315,9 +315,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0cand(0)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
@@ -357,9 +357,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0cand(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
@@ -406,9 +406,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(0)*sigmacand(0)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
@@ -448,9 +448,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(l)*sigmacand(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K[l]-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
 
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
@@ -535,9 +535,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           llycandsum=0;
           for(int j=0; j<Xidx(0); j++){
             if(obstype==1){
-              ll_y_cand(i,j,0) =z1cand(i)*(y(i,j,0)*log(pd(i,j,0))+(K(0)-y(i,j,0))*log(1-pd(i,j,0)));
+              ll_y_cand(i,j,0) =z1cand(i)*(y(i,j,0)*log(pd(i,j,0))+(tf(j,0)-y(i,j,0))*log(1-pd(i,j,0)));
             }else{
-              ll_y_cand(i,j,0)=z1cand(i)*(y(i,j,0)*log(K(0)*lamd(i,j,0))-K(0)*lamd(i,j,0));
+              ll_y_cand(i,j,0)=z1cand(i)*(y(i,j,0)*log(tf(j,0)*lamd(i,j,0))-tf(j,0)*lamd(i,j,0));
             }
             if(ll_y_cand(i,j,0)==ll_y_cand(i,j,0)){
               llycandsum+=ll_y_cand(i,j,0);
@@ -791,9 +791,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             llysum=0;
             for(int j=0; j<Xidx(l); j++){
               if(obstype==1){
-                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(K(l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
+                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(tf(j,l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
               }else{
-                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(K(l)*lamd(swapz(i),j,l))-K(l)*lamd(swapz(i),j,l));
+                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(tf(j,l)*lamd(swapz(i),j,l))-tf(j,l)*lamd(swapz(i),j,l));
               }
               if(ll_y_cand(swapz(i),j,l)==ll_y_cand(swapz(i),j,l)){
                 llycandsum+=ll_y_cand(swapz(i),j,l);
@@ -1077,9 +1077,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int l=0; l<t; l++){
               for(int j=0; j<Xidx(l); j++){
                 if(obstype==1){
-                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(K(l)-y(i,j,l))*log(1-pd(i,j,l)));
+                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
                 }else{
-                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(K(l)*lamd(i,j,l))-K(l)*lamd(i,j,l));
+                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
                 }
                 if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                   llycandsum+=ll_y_cand(i,j,l);
@@ -1289,9 +1289,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
               pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
               if(obstype==1){
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
@@ -1402,9 +1402,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
@@ -1460,9 +1460,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
@@ -1565,9 +1565,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
               if(obstype==1){
                 pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
               }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(K(l)*lamdcand(i,j,l))-K(l)*lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
               }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);

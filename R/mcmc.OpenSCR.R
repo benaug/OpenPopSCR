@@ -17,6 +17,8 @@
 #' centers are a bivariate normal draw from N(mu_i,sigma_t), but must stay in the state space.  "metamu2" enforces the metamus to stay in
 #' the state space, but the yearly ACs may leave.
 #' @param obstype a character indicating the observation model "bernoulli" or "poisson"
+#' @param tf a list of vectors containing the trap operation information.  Each vector has one element for each trap
+#' and indicates how many occasions each trap was operational.
 #'
 #' @return  a list with the posteriors for the open population SCR parameters (out), s, and z
 #' @author Ben Augustine, Richard Chandler
@@ -190,19 +192,9 @@
 mcmc.OpenSCR <-
   function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      if("tf"%in%names(data)){ #Do we have a trap operation file?
-        stop("Sorry, trap file functionality isn't ready yet =(")
-        out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
-      }else{#No trap file
-        out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
-      }
+      out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
     }else{#Don't use Rcpp
-      if("tf"%in%names(data)){ #Do we have a trap operation file?
-        stop("Sorry, trap file functionality isn't ready yet =(")
-        out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
-      }else{#No trap file
-        out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
-      }
+      out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
     }
     if(keepACs==TRUE){
       if("s2xout"%in%names(out2)){
