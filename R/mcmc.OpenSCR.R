@@ -27,8 +27,10 @@
 #' 3.  K, a vector of size t indicating how many capture occasions there were in each year
 #' 4.  J, a vector of size t indicating how many traps there were in each year
 #' 3. either buff or vertices.  buff is the fixed buffer for the traps to produce the state space.  It is applied to the minimum and maximum
-#' X and Y locations across years, producing a square or rectangular state space.  vertices is a matrix with the X and Y coordinates of a polygonal state
-#' space.
+#' X and Y locations across years, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
+#' of a polygonal state space with one polygon in each list element.  If there is just one polygon, the list is of length 1.
+#' If there are many polygons separated by large distances, you should think about the implications of activity centers
+#' possibly being stuck inside the polygons.
 #'
 #' inits sets the initial values and determines if parameters are fixed or year-specific. It must have elements "lam0"
 #' "sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal mobile
@@ -188,8 +190,6 @@
 mcmc.OpenSCR <-
   function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      if(is.list(data$vertices))
-        stop("multiple polygon state spaces not yet working for Rcpp")
       if("tf"%in%names(data)){ #Do we have a trap operation file?
         stop("Sorry, trap file functionality isn't ready yet =(")
         out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)

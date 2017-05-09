@@ -20,7 +20,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // mcmc_Open
-List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma, NumericVector gammaprime, NumericVector phi, arma::cube D, arma::cube lamd, arma::cube y, IntegerMatrix z, IntegerMatrix a, NumericMatrix s1, arma::cube s2, int ACtype, bool useverts, NumericMatrix vertices, NumericVector xlim, NumericVector ylim, IntegerMatrix knownmatrix, IntegerVector Xidx, arma::cube Xcpp, IntegerVector K, NumericMatrix Ez, double psi, IntegerVector N, NumericVector proplam0, NumericVector propsig, NumericVector propz, NumericVector propgamma, double props1x, double props1y, double props2x, double props2y, double propsigma_t, NumericVector sigma_t, int niter, int nburn, int nthin, int npar, IntegerVector each, bool jointZ, IntegerMatrix zpossible, IntegerMatrix apossible, IntegerMatrix cancel, int obstype);
+List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma, NumericVector gammaprime, NumericVector phi, arma::cube D, arma::cube lamd, arma::cube y, IntegerMatrix z, IntegerMatrix a, NumericMatrix s1, arma::cube s2, int ACtype, bool useverts, List vertices, NumericVector xlim, NumericVector ylim, IntegerMatrix knownmatrix, IntegerVector Xidx, arma::cube Xcpp, IntegerVector K, NumericMatrix Ez, double psi, IntegerVector N, NumericVector proplam0, NumericVector propsig, NumericVector propz, NumericVector propgamma, double props1x, double props1y, double props2x, double props2y, double propsigma_t, NumericVector sigma_t, int niter, int nburn, int nthin, int npar, IntegerVector each, bool jointZ, IntegerMatrix zpossible, IntegerMatrix apossible, IntegerMatrix cancel, int obstype);
 RcppExport SEXP OpenPopSCR_mcmc_Open(SEXP lam0SEXP, SEXP sigmaSEXP, SEXP gammaSEXP, SEXP gammaprimeSEXP, SEXP phiSEXP, SEXP DSEXP, SEXP lamdSEXP, SEXP ySEXP, SEXP zSEXP, SEXP aSEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP ACtypeSEXP, SEXP usevertsSEXP, SEXP verticesSEXP, SEXP xlimSEXP, SEXP ylimSEXP, SEXP knownmatrixSEXP, SEXP XidxSEXP, SEXP XcppSEXP, SEXP KSEXP, SEXP EzSEXP, SEXP psiSEXP, SEXP NSEXP, SEXP proplam0SEXP, SEXP propsigSEXP, SEXP propzSEXP, SEXP propgammaSEXP, SEXP props1xSEXP, SEXP props1ySEXP, SEXP props2xSEXP, SEXP props2ySEXP, SEXP propsigma_tSEXP, SEXP sigma_tSEXP, SEXP niterSEXP, SEXP nburnSEXP, SEXP nthinSEXP, SEXP nparSEXP, SEXP eachSEXP, SEXP jointZSEXP, SEXP zpossibleSEXP, SEXP apossibleSEXP, SEXP cancelSEXP, SEXP obstypeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -39,7 +39,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< arma::cube >::type s2(s2SEXP);
     Rcpp::traits::input_parameter< int >::type ACtype(ACtypeSEXP);
     Rcpp::traits::input_parameter< bool >::type useverts(usevertsSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type vertices(verticesSEXP);
+    Rcpp::traits::input_parameter< List >::type vertices(verticesSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type xlim(xlimSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type ylim(ylimSEXP);
     Rcpp::traits::input_parameter< IntegerMatrix >::type knownmatrix(knownmatrixSEXP);

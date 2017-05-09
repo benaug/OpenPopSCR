@@ -73,7 +73,7 @@ using namespace arma;
 // [[Rcpp::export]]
 List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,NumericVector gammaprime, NumericVector phi,
                arma::cube D,arma::cube lamd, arma::cube y,IntegerMatrix z,IntegerMatrix a, NumericMatrix s1,arma::cube s2,
-               int ACtype, bool useverts,NumericMatrix vertices,NumericVector xlim,NumericVector ylim,
+               int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,
                IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
@@ -187,7 +187,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   }
   //Preallocate for updating activity centers
   LogicalVector inbox(1);
-  // bool inbox2(1);
+  NumericVector inbox2(1);
   NumericMatrix dtmp(J,t);
   NumericVector ScandX(1);
   NumericVector ScandY(1);
@@ -221,7 +221,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       upz3(i)=FALSE;
     }
   }
-  // int polys=vertices.size();//number of polygons for SS
+  int polys=vertices.size();//number of polygons for SS
 
 
   int iteridx=0;
@@ -1266,14 +1266,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{
-              inbox=inoutCppOpen(ScandX,ScandY,vertices);
-              // inbox(0)=FALSE;
-              // for(int p=0; p<polys; p++){
-              //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-              //   if(inbox2){
-              //     inbox(0)=TRUE;
-              //   }
-              // }
+              // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+              inbox(0)=FALSE;
+              for(int p=0; p<polys; p++){
+                inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+                if(inbox2(0)){
+                  inbox(0)=TRUE;
+                }
+              }
             }
           }else{
             inbox(0)=TRUE;
@@ -1326,7 +1326,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
-          inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          inbox(0)=FALSE;
+          for(int p=0; p<polys; p++){
+            inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+            if(inbox2(0)){
+              inbox(0)=TRUE;
+            }
+          }
         }
         if(inbox(0)){
           lls2sum=0;
@@ -1376,7 +1383,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
-          inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          inbox(0)=FALSE;
+          for(int p=0; p<polys; p++){
+            inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+            if(inbox2(0)){
+              inbox(0)=TRUE;
+            }
+          }
         }
         if(inbox(0)){
           //sum ll across j for each i and l
@@ -1428,14 +1442,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
-            inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            // inbox=FALSE;
-            // for(int p=0; p<polys; p++){
-            //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-            //   if(inbox2){
-            //     inbox(0)=TRUE;
-            //   }
-            // }
+            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+            inbox(0)=FALSE;
+            for(int p=0; p<polys; p++){
+              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+              if(inbox2(0)){
+                inbox(0)=TRUE;
+              }
+            }
           }
           if(inbox(0)){
             //sum ll across j for each i and l
@@ -1533,14 +1547,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
-            inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            // inbox=FALSE;
-            // for(int p=0; p<polys; p++){
-            //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-            //   if(inbox2){
-            //     inbox(0)=TRUE;
-            //   }
-            // }
+            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+            inbox(0)=FALSE;
+            for(int p=0; p<polys; p++){
+              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+              if(inbox2(0)){
+                inbox(0)=TRUE;
+              }
+            }
           }
           if(inbox(0)){
             //sum ll across j for each i and l

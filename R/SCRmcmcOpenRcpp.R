@@ -389,7 +389,7 @@ SCRmcmcOpenRcpp <-
     }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
-                    ACtype, useverts, vertices[[1]], xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
+                    ACtype, useverts, vertices, xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
                     zpossible,apossible,cancel,obstype2)
