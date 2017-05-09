@@ -5,7 +5,7 @@ inoutCppOpen <- function(sx, sy, vertices) {
     .Call('OpenPopSCR_inoutCppOpen', PACKAGE = 'OpenPopSCR', sx, sy, vertices)
 }
 
-mcmc_Open <- function(lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel) {
-    .Call('OpenPopSCR_mcmc_Open', PACKAGE = 'OpenPopSCR', lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel)
+mcmc_Open <- function(lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype) {
+    .Call('OpenPopSCR_mcmc_Open', PACKAGE = 'OpenPopSCR', lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype)
 }
 

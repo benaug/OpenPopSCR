@@ -1,6 +1,6 @@
 SCRmcmcOpenRcpp <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed"){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli"){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -299,7 +299,9 @@ SCRmcmcOpenRcpp <-
         ll.y[,,l]= dbinom(y[,,l],K[l],pd[,,l]*z[,l],log=TRUE)
       }
     }else if(obstype=="poisson"){
-      ll.y[,,l]= dpois(y[,,l],K[l]*lamd[,,l]*z[,l],log=TRUE)
+      for(l in 1:t){
+        ll.y[,,l]= dpois(y[,,l],K[l]*lamd[,,l]*z[,l],log=TRUE)
+      }
     }else{
       stop("obstype must be 'bernoulli' or 'poisson'")
     }
@@ -390,7 +392,7 @@ SCRmcmcOpenRcpp <-
                     ACtype, useverts, vertices[[1]], xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
-                    zpossible,apossible,cancel)
+                    zpossible,apossible,cancel,obstype2)
 
     out=store[[1]]
     s1xout=store[[2]]

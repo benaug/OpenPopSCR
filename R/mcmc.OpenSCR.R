@@ -16,6 +16,7 @@
 #' "metamu" assumes animals have meta activity centers which are distributed uniformly across the landscape and the realized yearly activity
 #' centers are a bivariate normal draw from N(mu_i,sigma_t), but must stay in the state space.  "metamu2" enforces the metamus to stay in
 #' the state space, but the yearly ACs may leave.
+#' @param obstype a character indicating the observation model "bernoulli" or "poisson"
 #'
 #' @return  a list with the posteriors for the open population SCR parameters (out), s, and z
 #' @author Ben Augustine, Richard Chandler
