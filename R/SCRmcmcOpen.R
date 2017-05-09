@@ -27,7 +27,7 @@ SCRmcmcOpen <-
       buff<- data$buff
       xlim<- c(min(unlist(lapply(X,function(x){min(x[,1])}))),min(unlist(lapply(X,function(x){max(x[,1])}))))+c(-buff, buff)
       ylim<- c(min(unlist(lapply(X,function(x){min(x[,2])}))),min(unlist(lapply(X,function(x){max(x[,2])}))))+c(-buff, buff)
-      vertices=rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1]))
+      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1])))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -186,12 +186,12 @@ SCRmcmcOpen <-
     }
 
     #check to make sure everyone is in polygon
-    if("vertices"%in%names(data)){
-      vertices=data$vertices
-      useverts=TRUE
-    }else{
-      useverts=FALSE
-    }
+    # if("vertices"%in%names(data)){
+    #   vertices=data$vertices
+    #   useverts=TRUE
+    # }else{
+    #   useverts=FALSE
+    # }
     if(useverts==TRUE){
       inside=rep(NA,nrow(s1))
       for(i in 1:nrow(s1)){
@@ -223,7 +223,11 @@ SCRmcmcOpen <-
         for(i in 1:M){
           if(i%in%idx){
             trps<- X[[l]][y[i,,l]>0,1:2]
-            s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            if(is.matrix(trps)){
+              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            }else{
+              s2[i,l,]=trps
+            }
           }else{
             inside=FALSE
             while(inside==FALSE){
@@ -253,7 +257,11 @@ SCRmcmcOpen <-
         for(i in 1:M){
           if(i%in%idx){
             trps<- X[[l]][y[i,,l]>0,1:2]
-            s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            if(is.matrix(trps)){
+              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            }else{
+              s2[i,l,]=trps
+            }
           }else{
             inside=FALSE
             while(inside==FALSE){
@@ -894,10 +902,10 @@ SCRmcmcOpen <-
           }
           if(inbox){
             #Count z==0 guys
-            ll.s2.cand<-dnorm(s2[i,,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t,log=TRUE)
+            ll.s2.cand[i,]<-dnorm(s2[i,,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t,log=TRUE)
             if (runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2[i,]))) {
               s1[i, ]=Scand
-              ll.s2[i,]=ll.s2.cand
+              ll.s2[i,]=ll.s2.cand[i,]
             }
           }
         }

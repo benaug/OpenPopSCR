@@ -27,7 +27,7 @@ SCRmcmcOpenRcpp <-
       buff<- data$buff
       xlim<- c(min(unlist(lapply(X,function(x){min(x[,1])}))),min(unlist(lapply(X,function(x){max(x[,1])}))))+c(-buff, buff)
       ylim<- c(min(unlist(lapply(X,function(x){min(x[,2])}))),min(unlist(lapply(X,function(x){max(x[,2])}))))+c(-buff, buff)
-      vertices=rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1]))
+      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1])))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -227,15 +227,18 @@ SCRmcmcOpenRcpp <-
         for(i in 1:M){
           if(i%in%idx){
             trps<- X[[l]][y[i,,l]>0,1:2]
-            s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
-          }else{
-            inside=FALSE
-            while(inside==FALSE){
-              s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
-              # inside=inout(s2[i,l,],vertices)
-              inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+            if(is.matrix(trps)){
+              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            }else{
+              s2[i,l,]=trps
+            }          }else{
+              inside=FALSE
+              while(inside==FALSE){
+                s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
+                # inside=inout(s2[i,l,],vertices)
+                inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+              }
             }
-          }
         }
       }
     }else{
@@ -250,7 +253,11 @@ SCRmcmcOpenRcpp <-
         for(i in 1:M){
           if(i%in%idx){
             trps<- X[[l]][y[i,,l]>0,1:2]
-            s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            if(is.matrix(trps)){
+              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+            }else{
+              s2[i,l,]=trps
+            }
           }else{
             inside=FALSE
             while(inside==FALSE){
@@ -365,7 +372,7 @@ SCRmcmcOpenRcpp <-
     }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
-                    ACtype, useverts, vertices, xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
+                    ACtype, useverts, vertices[[1]], xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
                     zpossible,apossible,cancel)
