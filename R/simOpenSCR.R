@@ -256,7 +256,7 @@ simOpenSCR <-
     z[1:N[1],1]=1
     z[(N[1]+1):M]=0
     a[,1]= 1-z[,1] # Available to be recruited?
-    gamma.prime=rep(NA,4)
+    gamma.prime=rep(NA,t-1)
     for(i in 2:t) {
       ER <- sum(z[,i-1])*gamma[i-1] # Expected number of recruits
       A <- sum(a[,i-1]) # nAvailable to be recruited

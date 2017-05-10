@@ -56,6 +56,10 @@ SCRmcmcOpen <-
         tf[[l]]=rep(K[l],nrow(X[[i]]))
       }
     }
+    #make tf into matrix
+    for(l in 1:t){
+      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J,nrow=M,byrow=TRUE)
+    }
 
 
     ##pull out initial values
