@@ -576,9 +576,9 @@ SCRmcmcOpen <-
           z.cand <- z #use full z to calculate correct proposed Ez.cand
           z.cand[i,1] <- 1-z[i,1]
           if(obstype=="bernoulli"){
-            ll.y.cand[i,,1]=dbinom(y[i,,1],tf[[1]],pd[i,,1]*z.cand[i,1],log=TRUE)
+            ll.y.cand[i,,1]=dbinom(y[i,,1],tf[[1]][i,],pd[i,,1]*z.cand[i,1],log=TRUE)
           }else{
-            ll.y.cand[i,,1]=dpois(y[i,,1],tf[[1]]*lamd[i,,1]*z.cand[i,1],log=TRUE)
+            ll.y.cand[i,,1]=dpois(y[i,,1],tf[[1]][i,]*lamd[i,,1]*z.cand[i,1],log=TRUE)
           }
           if(((z.cand[i,1]==1&sum(z[i,])==0)|(sum(z[i,])==1&z.cand[i,1]==0&z[i,1]==1))&(t>2)){#Are we turning on a guy that was never on before? or turning off a guy that was only on on z1?
             a.cand <- a
@@ -696,9 +696,9 @@ SCRmcmcOpen <-
             zt.cand[i]=1-z[i,l]
             at.cand=1*(a[,l-1]==1&zt.cand==0) #who was available on last occasion and not proposed to be captured?
             if(obstype=="bernoulli"){
-              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]],pd[i,,l]*zt.cand[i],log=TRUE)
+              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*zt.cand[i],log=TRUE)
             }else{
-              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd[i,,l]*zt.cand[i],log=TRUE)
+              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*zt.cand[i],log=TRUE)
             }
             # ll.z.cand[,l] <- dbinom(zt.cand, 1, Ez[,l-1], log=TRUE) ## Don't subset z
             ll.z.cand[i,l] <- dbinom(zt.cand[i], 1, Ez[i,l-1], log=TRUE) ## why not?
@@ -819,11 +819,11 @@ SCRmcmcOpen <-
           #update ll.y
           if(obstype=="bernoulli"){
             for(l in 1:t){
-              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]],pd[i,,l]*z.cand[i,l],log=TRUE)
+              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*z.cand[i,l],log=TRUE)
             }
           }else{
             for(l in 1:t){
-              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd[i,,l]*z.cand[i,l],log=TRUE)
+              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*z.cand[i,l],log=TRUE)
             }
           }
 
@@ -958,9 +958,9 @@ SCRmcmcOpen <-
               }
               if(obstype=="bernoulli"){
                 pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]], pd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
               }
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t,log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t,log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))){
@@ -1036,9 +1036,9 @@ SCRmcmcOpen <-
               if(z[i,l]==0)
                 next
               if(obstype=="bernoulli"){
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]], pd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
               }
             }
             if(runif(1) < exp(sum(ll.y.cand[i,,]) -sum(ll.y[i,,]))){
@@ -1076,9 +1076,9 @@ SCRmcmcOpen <-
               }
               if(obstype=="bernoulli"){
                 pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]], pd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
               }
               if(l==1){#only ll.s2[i,1] matters
                 #time 1 to 2
@@ -1141,9 +1141,9 @@ SCRmcmcOpen <-
               }
               if(obstype=="bernoulli"){
                 pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]], pd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))){
                 s2[i,l, ] <- Scand
