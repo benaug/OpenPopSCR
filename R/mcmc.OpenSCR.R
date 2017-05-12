@@ -17,8 +17,7 @@
 #' centers are a bivariate normal draw from N(mu_i,sigma_t), but must stay in the state space.  "metamu2" enforces the metamus to stay in
 #' the state space, but the yearly ACs may leave.
 #' @param obstype a character indicating the observation model "bernoulli" or "poisson"
-#' @param tf a list of vectors containing the trap operation information.  Each vector has one element for each trap
-#' and indicates how many occasions each trap was operational.
+#' @param dSS a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 #'
 #' @return  a list with the posteriors for the open population SCR parameters (out), s, and z
 #' @author Ben Augustine, Richard Chandler
@@ -28,11 +27,13 @@
 #' If the traps do not vary across years, just repeat the same traps in each year
 #' 3.  K, a vector of size t indicating how many capture occasions there were in each year
 #' 4.  J, a vector of size t indicating how many traps there were in each year
-#' 3. either buff or vertices.  buff is the fixed buffer for the traps to produce the state space.  It is applied to the minimum and maximum
+#' 5. either buff or vertices.  buff is the fixed buffer for the traps to produce the state space.  It is applied to the minimum and maximum
 #' X and Y locations across years, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
 #' of a polygonal state space with one polygon in each list element.  If there is just one polygon, the list is of length 1.
 #' If there are many polygons separated by large distances, you should think about the implications of activity centers
 #' possibly being stuck inside the polygons.
+#' 6. tf is an optional list of vectors containing the trap operation information.  Each vector has one element for each trap
+#' and indicates how many occasions each trap was operational.
 #'
 #' inits sets the initial values and determines if parameters are fixed or year-specific. It must have elements "lam0"
 #' "sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal mobile
@@ -190,17 +191,20 @@
 #'@export
 
 mcmc.OpenSCR <-
-  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype){
+  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype,dSS=NA){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
+      if(length(dSS)>1){
+        stop("Ha!  Discrete SS not yet implemented in Rcpp.  Stuck with R for now. =)")
+      }
+      out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }else{#Don't use Rcpp
-      out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype)
+      out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }
     if(keepACs==TRUE){
       if("s2xout"%in%names(out2)){
-        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout)
+        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
       }else{
-        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout)
+        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout,dSS=dSS)
       }
     }else{
       list(out=out2$out)

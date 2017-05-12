@@ -73,12 +73,12 @@ using namespace arma;
 // [[Rcpp::export]]
 List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,NumericVector gammaprime, NumericVector phi,
                arma::cube D,arma::cube lamd, arma::cube y,IntegerMatrix z,IntegerMatrix a, NumericMatrix s1,arma::cube s2,
-               int ACtype, bool useverts,NumericMatrix vertices,NumericVector xlim,NumericVector ylim,
+               int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,
                IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerVector tf) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -187,7 +187,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   }
   //Preallocate for updating activity centers
   LogicalVector inbox(1);
-  // bool inbox2(1);
+  NumericVector inbox2(1);
   NumericMatrix dtmp(J,t);
   NumericVector ScandX(1);
   NumericVector ScandY(1);
@@ -221,7 +221,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       upz3(i)=FALSE;
     }
   }
-  // int polys=vertices.size();//number of polygons for SS
+  int polys=vertices.size();//number of polygons for SS
 
 
   int iteridx=0;
@@ -244,18 +244,33 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }
   }
   //  Detection function
-  for(int l=0; l<t; l++){
-    likcurr2D(l)=0;
-    for(int i=0; i<M; i++) {
-      for(int j=0; j<Xidx(l); j++){
-        pd(i,j,l)=1-exp(-lamd(i,j,l));
-        ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(K(l)-y(i,j,l))*log(1-pd(i,j,l)));
-        if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-          likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+  if(obstype==1){
+    for(int l=0; l<t; l++){
+      likcurr2D(l)=0;
+      for(int i=0; i<M; i++) {
+        for(int j=0; j<Xidx(l); j++){
+          pd(i,j,l)=1-exp(-lamd(i,j,l));
+          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
+          if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+            likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+          }
         }
       }
+      llysum+=likcurr2D(l); //full likelihood sum
     }
-    llysum+=likcurr2D(l); //full likelihood sum
+  }else{
+    for(int l=0; l<t; l++){
+      likcurr2D(l)=0;
+      for(int i=0; i<M; i++) {
+        for(int j=0; j<Xidx(l); j++){
+          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
+          if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+            likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+          }
+        }
+      }
+      llysum+=likcurr2D(l); //full likelihood sum
+    }
   }
   //ll.z. Some Ez are so small we're close to log(0) which is NaN in Rcpp
   for(int i=0; i<M; i++){//z1
@@ -298,8 +313,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           for(int i=0; i<M; i++) {
             for(int j=0; j<Xidx(l); j++){
               lamdcand(i,j,l)=lam0cand(0)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
               }
@@ -314,7 +333,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
                 lamd(i,j,l)=lamdcand(i,j,l);
-                pd(i,j,l)=pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l)=pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
               }
             }
@@ -334,8 +355,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           for(int i=0; i<M; i++) {
             for(int j=0; j<Xidx(l); j++){
               lamdcand(i,j,l)=lam0cand(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
               }
@@ -347,7 +372,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
                 ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
-                pd(i,j,l)=pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l)=pdcand(i,j,l);
+                }
                 lamd(i,j,l)=lamdcand(i,j,l);
               }
             }
@@ -377,8 +404,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           for(int i=0; i<M; i++) {
             for(int j=0; j<Xidx(l); j++){
               lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(0)*sigmacand(0)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
               }
@@ -393,7 +424,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
                 lamd(i,j,l)=lamdcand(i,j,l);
-                pd(i,j,l)=pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l)=pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
               }
             }
@@ -413,8 +446,13 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           for(int i=0; i<M; i++) {
             for(int j=0; j<Xidx(l); j++){
               lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(l)*sigmacand(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K[l]-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 likcand2D(l)+=ll_y_cand(i,j,l);
               }
@@ -427,7 +465,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
                 ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
-                pd(i,j,l)=pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l)=pdcand(i,j,l);
+                }
                 lamd(i,j,l)=lamdcand(i,j,l);
               }
             }
@@ -494,7 +534,11 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           llysum=0;
           llycandsum=0;
           for(int j=0; j<Xidx(0); j++){
-            ll_y_cand(i,j,0) =z1cand(i)*(y(i,j,0)*log(pd(i,j,0))+(K(0)-y(i,j,0))*log(1-pd(i,j,0)));
+            if(obstype==1){
+              ll_y_cand(i,j,0) =z1cand(i)*(y(i,j,0)*log(pd(i,j,0))+(tf(j,0)-y(i,j,0))*log(1-pd(i,j,0)));
+            }else{
+              ll_y_cand(i,j,0)=z1cand(i)*(y(i,j,0)*log(tf(j,0)*lamd(i,j,0))-tf(j,0)*lamd(i,j,0));
+            }
             if(ll_y_cand(i,j,0)==ll_y_cand(i,j,0)){
               llycandsum+=ll_y_cand(i,j,0);
             }
@@ -746,7 +790,11 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             llycandsum=0;
             llysum=0;
             for(int j=0; j<Xidx(l); j++){
-              ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(K(l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
+              if(obstype==1){
+                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(tf(j,l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
+              }else{
+                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(tf(j,l)*lamd(swapz(i),j,l))-tf(j,l)*lamd(swapz(i),j,l));
+              }
               if(ll_y_cand(swapz(i),j,l)==ll_y_cand(swapz(i),j,l)){
                 llycandsum+=ll_y_cand(swapz(i),j,l);
               }
@@ -1028,7 +1076,11 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             llysum=0;
             for(int l=0; l<t; l++){
               for(int j=0; j<Xidx(l); j++){
-                ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(K(l)-y(i,j,l))*log(1-pd(i,j,l)));
+                if(obstype==1){
+                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
+                }
                 if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                   llycandsum+=ll_y_cand(i,j,l);
                 }
@@ -1214,14 +1266,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{
-              inbox=inoutCppOpen(ScandX,ScandY,vertices);
-              // inbox(0)=FALSE;
-              // for(int p=0; p<polys; p++){
-              //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-              //   if(inbox2){
-              //     inbox(0)=TRUE;
-              //   }
-              // }
+              // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+              inbox(0)=FALSE;
+              for(int p=0; p<polys; p++){
+                inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+                if(inbox2(0)){
+                  inbox(0)=TRUE;
+                }
+              }
             }
           }else{
             inbox(0)=TRUE;
@@ -1236,7 +1288,11 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
               pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
               }
@@ -1253,7 +1309,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               for(int j=0; j<Xidx(l); j++){
                 D(i,j,l) = dtmp(j,l);
                 lamd(i,j,l) = lamdcand(i,j,l);
-                pd(i,j,l) = pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l) = pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
@@ -1268,16 +1326,15 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
-          inbox=inoutCppOpen(ScandX,ScandY,vertices);
-          // inbox=FALSE;
-          // for(int p=0; p<polys; p++){
-          //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-          //   if(inbox2){
-          //     inbox(0)=TRUE;
-          //   }
-          // }
+          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          inbox(0)=FALSE;
+          for(int p=0; p<polys; p++){
+            inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+            if(inbox2(0)){
+              inbox(0)=TRUE;
+            }
+          }
         }
-
         if(inbox(0)){
           lls2sum=0;
           lls2candsum=0;
@@ -1326,14 +1383,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
-          inbox=inoutCppOpen(ScandX,ScandY,vertices);
-          // inbox=FALSE;
-          // for(int p=0; p<polys; p++){
-          //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-          //   if(inbox2){
-          //     inbox(0)=TRUE;
-          //   }
-          // }
+          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+          inbox(0)=FALSE;
+          for(int p=0; p<polys; p++){
+            inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+            if(inbox2(0)){
+              inbox(0)=TRUE;
+            }
+          }
         }
         if(inbox(0)){
           //sum ll across j for each i and l
@@ -1343,8 +1400,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int j=0; j<Xidx(l); j++){
               dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
               }
@@ -1363,7 +1424,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               for(int j=0; j<J; j++){
                 D(i,j,l) = dtmp(j,l);
                 lamd(i,j,l) = lamdcand(i,j,l);
-                pd(i,j,l) = pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l) = pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
@@ -1379,14 +1442,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
-            inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            // inbox=FALSE;
-            // for(int p=0; p<polys; p++){
-            //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-            //   if(inbox2){
-            //     inbox(0)=TRUE;
-            //   }
-            // }
+            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+            inbox(0)=FALSE;
+            for(int p=0; p<polys; p++){
+              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+              if(inbox2(0)){
+                inbox(0)=TRUE;
+              }
+            }
           }
           if(inbox(0)){
             //sum ll across j for each i and l
@@ -1395,8 +1458,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int j=0; j<Xidx(l); j++){
               dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
               }
@@ -1441,7 +1508,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               for(int j=0; j<Xidx(l); j++){
                 D(i,j,l) = dtmp(j,l);
                 lamd(i,j,l) = lamdcand(i,j,l);
-                pd(i,j,l) = pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l) = pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
@@ -1478,14 +1547,14 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
-            inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            // inbox=FALSE;
-            // for(int p=0; p<polys; p++){
-            //   inbox2=inoutCppOpen(ScandX,ScandY,vertices[p]);
-            //   if(inbox2){
-            //     inbox(0)=TRUE;
-            //   }
-            // }
+            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
+            inbox(0)=FALSE;
+            for(int p=0; p<polys; p++){
+              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+              if(inbox2(0)){
+                inbox(0)=TRUE;
+              }
+            }
           }
           if(inbox(0)){
             //sum ll across j for each i and l
@@ -1494,8 +1563,12 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int j=0; j<Xidx(l); j++){
               dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
               lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(K(l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              if(obstype==1){
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+              }else{
+                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+              }
               if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
                 llycandsum+=ll_y_cand(i,j,l);
               }
@@ -1510,7 +1583,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               for(int j=0; j<J; j++){
                 D(i,j,l) = dtmp(j,l);
                 lamd(i,j,l) = lamdcand(i,j,l);
-                pd(i,j,l) = pdcand(i,j,l);
+                if(obstype==1){
+                  pd(i,j,l) = pdcand(i,j,l);
+                }
                 ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }

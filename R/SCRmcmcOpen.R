@@ -1,6 +1,6 @@
 SCRmcmcOpen <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli"){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -205,6 +205,7 @@ SCRmcmcOpen <-
     ll.z.cand=ll.z
     gamma.prime.cand=gamma.prime
     #Optimize starting locations given where they are trapped. Initalizing s1 and s2 at same locs
+
     s1<- cbind(runif(M,xlim[1],xlim[2]), runif(M,ylim[1],ylim[2])) #assign random locations
     idx=which(known.vector==1) #switch for those actually caught
     for(i in idx){
@@ -214,30 +215,40 @@ SCRmcmcOpen <-
       }
       s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
     }
-
-    #check to make sure everyone is in polygon
-    # if("vertices"%in%names(data)){
-    #   vertices=data$vertices
-    #   useverts=TRUE
-    # }else{
-    #   useverts=FALSE
-    # }
-    if(useverts==TRUE){
-      inside=rep(NA,nrow(s1))
-      for(i in 1:nrow(s1)){
-        # inside[i]=inout(s1[i,],vertices)
-        inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
-      }
-      idx=which(inside==FALSE)
-      if(length(idx)>0){
-        for(i in 1:length(idx)){
-          while(inside[idx[i]]==FALSE){
-            s1[idx[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-            # inside[idx[i]]=inout(s1[idx[i],],vertices)
-            inside[idx[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx[i],],x)})))
+    if(length(dSS)>1){
+      usedSS=TRUE
+    }else{
+      usedSS=FALSE
+    }
+    if(!usedSS){
+      #check to make sure everyone is in polygon
+      if(useverts==TRUE){
+        inside=rep(NA,nrow(s1))
+        for(i in 1:nrow(s1)){
+          # inside[i]=inout(s1[i,],vertices)
+          inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
+        }
+        idx=which(inside==FALSE)
+        if(length(idx)>0){
+          for(i in 1:length(idx)){
+            while(inside[idx[i]]==FALSE){
+              s1[idx[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+              # inside[idx[i]]=inout(s1[idx[i],],vertices)
+              inside[idx[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx[i],],x)})))
+            }
           }
         }
       }
+    }else{#discrete SS
+      dSS=as.matrix(dSS)
+      #snap everyone back to closest place in state space
+      for(i in idx){
+        dists=sqrt((s1[i,1]-dSS[,1])^2+(s1[i,2]-dSS[,2])^2)
+        s1[i,]=dSS[which(dists==min(dists))[1],]
+      }
+      #randomly assign uncaptured guys to cells
+      idx2=setdiff(1:M,idx)
+      s1[idx2,]=dSS[sample(1:nrow(dSS),length(idx2)),]
     }
     #Initialize s2
     #Assign s2 to be s1 for all occasions
@@ -302,6 +313,15 @@ SCRmcmcOpen <-
 
             }
           }
+        }
+      }
+    }
+    if(usedSS){
+      #snap everyone back to closest place in state space
+      for(l in 1:t){
+        for(i in 1:M){
+          dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+          s2[i,l,]=dSS[which(dists==min(dists))[1],]
         }
       }
     }
@@ -937,6 +957,10 @@ SCRmcmcOpen <-
         for (i in 1:M){
           for(l in 1:t){
             Scand=c(rnorm(1, s2[i,l,1], proppars$s2x), rnorm(1, s2[i,l,2], proppars$s2y))
+            if(usedSS){
+              dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+              Scand=dSS[which(dists==min(dists)),]
+            }
             if(ACtype=="metamu"){
               if(useverts==FALSE){
                 inbox=Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
@@ -979,6 +1003,10 @@ SCRmcmcOpen <-
         #Update meta mus
         for (i in 1:M){
           Scand <- c(rnorm(1,s1[i,1],proppars$s1x), rnorm(1,s1[i,2],proppars$s1y))
+          if(usedSS){
+            dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+            Scand=dSS[which(dists==min(dists)),]
+          }
           if(useverts==FALSE){
             inbox <- Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
           }else{
@@ -1006,6 +1034,10 @@ SCRmcmcOpen <-
       }else if(ACtype=="fixed"){#Stationary ACs
         for (i in 1:M) {
           Scand <- c(rnorm(1, s1[i, 1], proppars$s2x), rnorm(1, s1[i, 2], proppars$s2y))
+          if(usedSS){
+            dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+            Scand=dSS[which(dists==min(dists)),]
+          }
           if(useverts==FALSE){
             inbox <- Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
           }else{
@@ -1059,6 +1091,10 @@ SCRmcmcOpen <-
         for (i in 1:M){
           for(l in 1:t){
             Scand=c(rnorm(1, s2[i,l,1], proppars$s2x), rnorm(1, s2[i,l,2], proppars$s2y))
+            if(usedSS){
+              dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+              Scand=dSS[which(dists==min(dists)),]
+            }
             if(useverts==FALSE){
               inbox=Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
             }else{
@@ -1124,6 +1160,10 @@ SCRmcmcOpen <-
           for (i in 1:M) {
             # if(z[i,l]==0) next
             Scand <- c(rnorm(1, s2[i,l,1], proppars$s2x), rnorm(1, s2[i,l,2], proppars$s2y))
+            if(usedSS){
+              dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+              Scand=dSS[which(dists==min(dists)),]
+            }
             if(useverts==FALSE){
               inbox <- Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
             }else{
