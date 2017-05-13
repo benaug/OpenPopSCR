@@ -228,13 +228,17 @@ SCRmcmcOpen <-
           # inside[i]=inout(s1[i,],vertices)
           inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
         }
-        idx=which(inside==FALSE)
-        if(length(idx)>0){
+        idx2=which(inside==FALSE)
+        if(any(idx2%in%idx)){
+          warning("Vertices too complicated for this AC initialization algorithm to provide good starting values.
+                  Either hassle Ben to fix it or use a discrete state space")
+        }
+        if(length(idx2)>0){
           for(i in 1:length(idx)){
-            while(inside[idx[i]]==FALSE){
-              s1[idx[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+            while(inside[idx2[i]]==FALSE){
+              s1[idx2[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
               # inside[idx[i]]=inout(s1[idx[i],],vertices)
-              inside[idx[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx[i],],x)})))
+              inside[idx2[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx2[i],],x)})))
             }
           }
         }

@@ -193,9 +193,9 @@
 mcmc.OpenSCR <-
   function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype,dSS=NA){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      if(length(dSS)>1){
-        stop("Ha!  Discrete SS not yet implemented in Rcpp.  Stuck with R for now. =)")
-      }
+      # if(length(dSS)>1){
+      #   stop("Ha!  Discrete SS not yet implemented in Rcpp.  Stuck with R for now. =)")
+      # }
       out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }else{#Don't use Rcpp
       out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)

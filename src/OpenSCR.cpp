@@ -78,7 +78,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerVector tf) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerVector tf,NumericMatrix dSS,bool usedSS) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -284,6 +284,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       }
     }
   }
+  //Set up discrete state space
+  int NdSS=dSS.nrow();
+  NumericVector dists(NdSS);
 
   //Here we go!
   for(int iter=0; iter<niter; iter++){
@@ -1262,6 +1265,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         for(int l=0; l<t; l++) {
           ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
           ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+          if(usedSS){
+            double mindist=100000;
+            int idxdist=0;
+            for(int i2=0; i2<NdSS;i2++){
+              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+              if(dists(i2)<mindist){
+                mindist=dists(i2);
+                idxdist=i2;
+              }
+            }
+            ScandX(0)=dSS(idxdist,0);
+            ScandY(0)=dSS(idxdist,1);
+          }
           if(ACtype==2){
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
@@ -1323,6 +1339,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       for(int i=0; i<M; i++) {
         ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
         ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
+        if(usedSS){
+          double mindist=100000;
+          int idxdist=0;
+          for(int i2=0; i2<NdSS;i2++){
+            dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+            if(dists(i2)<mindist){
+              mindist=dists(i2);
+              idxdist=i2;
+            }
+          }
+          ScandX(0)=dSS(idxdist,0);
+          ScandY(0)=dSS(idxdist,1);
+        }
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
@@ -1380,6 +1409,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       for(int i=0; i<M; i++) {
         ScandX=Rcpp::rnorm(1,s1(i,0),props2x);
         ScandY=Rcpp::rnorm(1,s1(i,1),props2y);
+        if(usedSS){
+          double mindist=100000;
+          int idxdist=0;
+          for(int i2=0; i2<NdSS;i2++){
+            dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+            if(dists(i2)<mindist){
+              mindist=dists(i2);
+              idxdist=i2;
+            }
+          }
+          ScandX(0)=dSS(idxdist,0);
+          ScandY(0)=dSS(idxdist,1);
+        }
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
@@ -1439,6 +1481,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         for(int l=0; l<t; l++) {
           ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
           ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+          if(usedSS){
+            double mindist=100000;
+            int idxdist=0;
+            for(int i2=0; i2<NdSS;i2++){
+              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+              if(dists(i2)<mindist){
+                mindist=dists(i2);
+                idxdist=i2;
+              }
+            }
+            ScandX(0)=dSS(idxdist,0);
+            ScandY(0)=dSS(idxdist,1);
+          }
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
@@ -1544,6 +1599,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         for(int i=0; i<M; i++) {
           ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
           ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+          if(usedSS){
+            double mindist=100000;
+            int idxdist=0;
+            for(int i2=0; i2<NdSS;i2++){
+              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+              if(dists(i2)<mindist){
+                mindist=dists(i2);
+                idxdist=i2;
+              }
+            }
+            ScandX(0)=dSS(idxdist,0);
+            ScandY(0)=dSS(idxdist,1);
+          }
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{

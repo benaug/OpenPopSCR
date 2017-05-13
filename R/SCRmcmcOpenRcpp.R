@@ -1,6 +1,6 @@
 SCRmcmcOpenRcpp <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli"){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -199,6 +199,8 @@ SCRmcmcOpenRcpp <-
     }
     ll.z.cand=ll.z
     #Optimize starting locations given where they are trapped. Initalizing s1 and s2 at same locs
+    #Optimize starting locations given where they are trapped. Initalizing s1 and s2 at same locs
+
     s1<- cbind(runif(M,xlim[1],xlim[2]), runif(M,ylim[1],ylim[2])) #assign random locations
     idx=which(known.vector==1) #switch for those actually caught
     for(i in idx){
@@ -208,34 +210,45 @@ SCRmcmcOpenRcpp <-
       }
       s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
     }
-
-    #check to make sure everyone is in polygon
-    if("vertices"%in%names(data)){
-      vertices=data$vertices
-      useverts=TRUE
+    if(length(dSS)>1){
+      usedSS=TRUE
     }else{
-      useverts=FALSE
+      usedSS=FALSE
     }
-    if(useverts==TRUE){
-      inside=rep(NA,nrow(s1))
-      for(i in 1:nrow(s1)){
-        # inside[i]=inout(s1[i,],vertices)
-        inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
-      }
-      idx=which(inside==FALSE)
-      if(length(idx)>0){
-        for(i in 1:length(idx)){
-          while(inside[idx[i]]==FALSE){
-            s1[idx[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-            # inside[idx[i]]=inout(s1[idx[i],],vertices)
-            inside[idx[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx[i],],x)})))
-
+    if(!usedSS){
+      #check to make sure everyone is in polygon
+      if(useverts==TRUE){
+        inside=rep(NA,nrow(s1))
+        for(i in 1:nrow(s1)){
+          # inside[i]=inout(s1[i,],vertices)
+          inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
+        }
+        idx2=which(inside==FALSE)
+        if(any(idx2%in%idx)){
+          warning("Vertices too complicated for this AC initialization algorithm to provide good starting values.
+                  Either hassle Ben to fix it or use a discrete state space")
+        }
+        if(length(idx2)>0){
+          for(i in 1:length(idx)){
+            while(inside[idx2[i]]==FALSE){
+              s1[idx2[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+              # inside[idx[i]]=inout(s1[idx[i],],vertices)
+              inside[idx2[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx2[i],],x)})))
+            }
           }
         }
-      }
+        }
+  }else{#discrete SS
+    dSS=as.matrix(dSS)
+    #snap everyone back to closest place in state space
+    for(i in idx){
+      dists=sqrt((s1[i,1]-dSS[,1])^2+(s1[i,2]-dSS[,2])^2)
+      s1[i,]=dSS[which(dists==min(dists))[1],]
     }
-    #Initialize s2
-    #Assign s2 to be s1 for all occasions
+    #randomly assign uncaptured guys to cells
+    idx2=setdiff(1:M,idx)
+    s1[idx2,]=dSS[sample(1:nrow(dSS),length(idx2)),]
+  }
     #Initialize s2
     #Assign s2 to be s1 for all occasions
     s2=array(NA,dim=c(M,t,2))
@@ -254,19 +267,27 @@ SCRmcmcOpenRcpp <-
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
               s2[i,l,]=trps
-            }          }else{
-              inside=FALSE
-              while(inside==FALSE){
-                s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
-                # inside=inout(s2[i,l,],vertices)
-                inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
-              }
             }
+          }else{
+            inside=FALSE
+            while(inside==FALSE){
+              s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
+              # inside=inout(s2[i,l,],vertices)
+              inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+            }
+          }
         }
       }
-    }else{
-      proppars$sigma_t=0.1
-      sigma_t=1
+      if(ACtype%in%c("metamu","metamu2")){
+        ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t,log=TRUE))
+        ll.s2.cand=ll.s2
+      }else if(ACtype=="markov"){
+        ll.s2=matrix(NA,nrow=M,ncol=t-1)
+        for(l in 2:t){
+          ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t,log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t,log=TRUE))
+        }
+        ll.s2.cand=ll.s2
+      }
     }
     if(ACtype=="independent"){
       #update s2s for guys captured each year and put uncaptured guys OFF the GRID so they can get turned on.
@@ -291,6 +312,15 @@ SCRmcmcOpenRcpp <-
 
             }
           }
+        }
+      }
+    }
+    if(usedSS){
+      #snap everyone back to closest place in state space
+      for(l in 1:t){
+        for(i in 1:M){
+          dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+          s2[i,l,]=dSS[which(dists==min(dists))[1],]
         }
       }
     }
@@ -410,12 +440,15 @@ SCRmcmcOpenRcpp <-
     for(l in 1:t){
       tf2[1:J[l],l]=tf[[l]]
     }
+    if(!usedSS){
+      dSS=matrix(1)#dummy to fool rcpp
+    }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
                     ACtype, useverts, vertices, xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
-                    zpossible,apossible,cancel,obstype2,tf2)
+                    zpossible,apossible,cancel,obstype2,tf2,dSS,usedSS)
 
     out=store[[1]]
     s1xout=store[[2]]
