@@ -125,7 +125,11 @@ SCRmcmcOpenRcpp <-
     }
     #turn on some augmented guys for z1
     # z[(n+1):M,1]=rbinom(M-n,1,psi)#add augmented guys to t=1 with psi.. not enough
+
     z1deal=psi*M-sum(z[,1])
+    if(z1deal<0){
+      stop("initial psi is too small given M to turn on any uncaptured z[,1] guys ")
+    }
     z[sample((n+1):M,z1deal),1]=1
     # r[,1]=z[,1]
     a=matrix(1,nrow=M,ncol=t) #a is available to be recruited
