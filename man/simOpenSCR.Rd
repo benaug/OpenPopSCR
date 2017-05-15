@@ -2,7 +2,7 @@
 % Please edit documentation in R/simOpenSCR.R
 \name{simOpenSCR}
 \alias{simOpenSCR}
-\title{Simulate data from a Open population SCR study.  Update help file later.  Add polygon SS later.}
+\title{Simulate data from a Open population SCR study.}
 \usage{
 simOpenSCR(N = c(40, 60, 80), gamma = NULL, phi = rep(0.8, 2),
   lam0 = rep(0.2, 3), sigma = rep(0.5, 3), K = rep(10, 3), X = X,

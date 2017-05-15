@@ -1,4 +1,9 @@
- # data=simOpenSCR(N=N,gamma=gamma,phi=phi,lam0=lam0,sigma=sigma,sigma_t=0.5,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
+#' Plot the open population simulation. Will document later.
+#' @description Plot the open population simulation. Will document later.
+#' @param data an object created by simOpenSCR
+#' @return a plot
+#' @author Ben Augustine
+#' @export
 simOpenSCR.plot=function(data,animated=FALSE,delay=2){
   X=data$X
   s=data$sfull

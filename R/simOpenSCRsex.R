@@ -4,18 +4,15 @@ e2dist<-function (x, y)
   dvec <- sqrt((x[, 1] - y[i, 1])^2 + (x[, 2] - y[i, 2])^2)
   matrix(dvec, nrow = nrow(x), ncol = nrow(y), byrow = F)
 }
-
-#' Simulate data from a Open population SCR study.
-#' @param N a vector indicating the number of individuals to simulate. If size 1, provide a gamma to determine N in subsequent years.
-#' Otherwise, size is t, the number of years.
-#' @param lam0 a vector containing the detection function hazard rate in each year. If size 1, constant rate is assumed.
-#' Otherwise, size is t, the number of years.
-#' Otherwise, size is t, the number of years.
-#' @param sigma a vector containing the spatial scale parameter in each year.  If size 1, sigma is fixed across years.
-#' @param gamma a vector containing the per capita recruitment rates for each year.  If size 1, gamma is fixed across years.
-#' Otherwise, size is t-1.  Do not enter a gamma if N for all years specified.
-#' @param phi a vector containing the survival rates for each year. If size 1, phi is fixed across years.
-#' Otherwise, size is t-1.
+#' Simulate data from a Open population SCR study with sex (or other group of size 2) differences.
+#' @param N a 1 x 2 vector or t x 2 matrix indicating the number of individuals to simulate. Column 1 is males, column 2 is females.
+#' If only the first year is entered, provide a gamma to determine N in subsequent years.  Otherwise, size is t, the number of years.
+#' @param lam0 a vector containing the detection function hazard rate in each year. If size 1, no sex difference is assumed.
+#' Otherwise, sexes differ.
+#' @param sigma a vector containing the spatial scale parameter in each year. If size 1, no sex difference is assumed.
+#' Otherwise, sexes differ.  Do not enter a gamma if N for all years specified.
+#' @param phi a vector containing the survival rates for each year. If size 1, no sex difference is assumed.
+#' Otherwise, sexes differ.
 #' @param K  a vector containing the number of capture occasions in each year
 #' @param X a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
 #' the number of traps in each year.
@@ -26,22 +23,25 @@ e2dist<-function (x, y)
 #' the same as "metamu" except only meta mus are required to stay inside the state space.  markov" assumes activity
 #' centers in year t+1 is a bivariate normal draw centered around the activity center in year t (but must stay within
 #' the state space), and "independent" assumes animals randomly mix between years.
-#' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov"
+#' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov".  If size 1, no sex difference is assumed.
+#' Otherwise, sexes differ.
 #' @param M an integer indicating the level of data augmentation to use during simulation.
 #' @return a list containing the capture history, activity centers, trap object, and several other data objects and summaries.
 #' @description This function simulates data from an open population SCR model.
 #' @author Ben Augustine
 #' @export
 
-simOpenSCR <-
-  function(N=c(40,60,80),gamma=NULL,phi=rep(0.8,2),lam0=rep(0.2,3),sigma=rep(0.50,3),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
+simOpenSCRsex <-
+  function(N=cbind(c(30,30),c(35,45,55)),pIDsex=0.75,gamma=NULL,gamma.sex=TRUE,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
            obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000){
     #Check for user errors
-    if(length(N)==1&is.null(gamma)){
-      stop("Must provide gamma if length(N)==1")
+    if(!is.matrix(N)==1&is.null(gamma)){
+      stop("Must provide gamma if N is a vector")
     }
-    if(length(N)==t&!is.null(gamma)){
-      stop("Do not provide gamma if length(N)=t")
+    if(is.matrix(N)){
+      if(nrow(N)==t&!is.null(gamma)){
+        stop("Do not provide gamma if nrow(N)=t")
+      }
     }
     if(length(K)!=t){
       stop("Must supply a K for each year")
@@ -81,12 +81,17 @@ simOpenSCR <-
     }
     s=array(NA,dim=c(M,t,2))
     D=lamd=array(NA,dim=c(M,maxJ,t))
+    sex=rbinom(M,1,psex)+1
     if(length(lam0)==1){
-      lam0=rep(lam0,t)
+      lam0=rep(lam0,2)
     }
     if(length(sigma)==1){
-      sigma=rep(sigma,t)
+      sigma=rep(sigma,2)
     }
+    if(length(sigma_t)==1){
+      sigma_t=rep(sigma_t,2)
+    }
+
     if(ACtype=="fixed"){#no movement
       if(useverts){
         mu<- cbind(runif(M, xlim[1],xlim[2]), runif(M,ylim[1],ylim[2]))
@@ -104,7 +109,7 @@ simOpenSCR <-
       for(i in 1:t){
         s[,i,]=mu
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
       }
     }else if(ACtype=="metamu"){
       if(useverts){
@@ -124,8 +129,8 @@ simOpenSCR <-
         for(j in 1:M){
           out=1
           while(out==1){
-            s[j,i,1]=rnorm(1,mu[j,1],sigma_t)
-            s[j,i,2]=rnorm(1,mu[j,2],sigma_t)
+            s[j,i,1]=rnorm(1,mu[j,1],sigma_t[sex[j]])
+            s[j,i,2]=rnorm(1,mu[j,2],sigma_t[sex[j]])
             if(useverts){
               inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
             }else{
@@ -141,7 +146,7 @@ simOpenSCR <-
           }
         }
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
       }
     }else if(ACtype=="metamu2"){
       if(useverts){
@@ -158,11 +163,13 @@ simOpenSCR <-
       }
       for(i in 1:t){#meta mu movement, only meta mus stay in SS
         for(j in 1:M){
-          s[j,i,1]=rnorm(1,mu[j,1],sigma_t)
-          s[j,i,2]=rnorm(1,mu[j,2],sigma_t)
+          s[j,i,1]=rnorm(1,mu[j,1],sigma_t[sex[j]])
+          s[j,i,2]=rnorm(1,mu[j,2],sigma_t[sex[j]])
         }
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+
+        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+
       }
 
     }else if(ACtype=="markov"){
@@ -179,14 +186,14 @@ simOpenSCR <-
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
       }
       D[,1:nrow(X[[1]]),1]=e2dist(s[,1,],X[[1]])
-      lamd[,,1]=lam0[1]*exp(-D[,,1]^2/(2*sigma[1]*sigma[1]))
+      lamd[,,1]=lam0[sex]*exp(-D[,,1]^2/(2*sigma[sex]*sigma[sex]))
       for(i in 2:t){
         countout=0
         for(j in 1:M){
           out=1
           while(out==1){
-            s[j,i,1]=rnorm(1,s[j,i-1,1],sigma_t)
-            s[j,i,2]=rnorm(1,s[j,i-1,2],sigma_t)
+            s[j,i,1]=rnorm(1,s[j,i-1,1],sigma_t[sex[j]])
+            s[j,i,2]=rnorm(1,s[j,i-1,2],sigma_t[sex[j]])
             if(useverts){
               inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
             }else{
@@ -202,7 +209,7 @@ simOpenSCR <-
           }
         }
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        lamd[,,i]=lam0[sex[i]]*exp(-D[,,i]^2/(2*sigma[sex[i]]*sigma[sex[i]]))
       }
     }else if(ACtype=="independent"){
       for(i in 1:t){
@@ -223,7 +230,7 @@ simOpenSCR <-
           }
         }
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
       }
 
     }else{
@@ -232,42 +239,54 @@ simOpenSCR <-
     psi=N[1]/M
     #Calculate (per capita) gamma or N
     if(length(phi)==1){
-      phi=rep(phi,t-1)
+      phi=rep(phi,2)
     }
 
     if(is.null(gamma)){
-      gamma=rep(NA,t-1)
-      for(l in 2:t){
-        gamma[l-1]=(N[l]-phi[t-1]*N[l-1])/(N[l-1])
+      gamma=matrix(NA,nrow=t-1,ncol=2)
+      for(i in 1:2){
+        for(l in 2:t){
+          gamma[l-1,i]=(N[l,i]-phi[i]*N[l-1,i])/(N[l-1,i])
+        }
       }
       storeparms$gamma=gamma
     }else{
       if(length(gamma)==1){
-        gamma=rep(gamma,t-1)
+        gamma=rep(gamma,2)
       }
-      N=c(N,rep(NA,t-1))
-      for(l in 2:t){
-        N[l]=round(N[l-1]*phi[t-1]+N[l-1]*gamma[l-1])
+      N=rbind(N,matrix(NA,ncol=2,nrow=t-1))
+      for(i in 1:2){
+        for(l in 2:t){
+          N[l,i]=round(N[l-1,i]*phi[i]+N[l-1,i]*gamma[i])
+        }
       }
+      gamma=cbind(rep(gamma[1],t-1),rep(gamma[2],t-1))
     }
-    #####Population Dynamics############# Stolen from Richard Chandler
-    z=a=matrix(NA,M,t)
-    # z[,1] <- rbinom(M, 1, EN1/M)
-    z[1:N[1],1]=1
-    z[(N[1]+1):M]=0
+    #####Population Dynamics#############  sex specific!
+    z=a=matrix(0,M,t)
+    z[sex==1&cumsum(sex==1)<=N[1,1],1]=1
+    z[sex==2&cumsum(sex==2)<=N[1,2],1]=1
     a[,1]= 1-z[,1] # Available to be recruited?
-    gamma.prime=rep(NA,t-1)
+    gamma.prime.M=gamma.prime.F=rep(NA,t-1)
     for(i in 2:t) {
-      ER <- sum(z[,i-1])*gamma[i-1] # Expected number of recruits
-      A <- sum(a[,i-1]) # nAvailable to be recruited
-      if(ER>A){
-        stop("M is too low. There aren't any individuals left to be recruited")
+      ER.M <- sum(z[,i-1]==1)*gamma[i-1,1] # Expected number of recruits, not sex-specific
+      ER.F <- sum(z[,i-1]==1)*gamma[i-1,2]
+      A.M <- sum(a[,i-1]==1&sex==1) # nAvailable to be recruited
+      A.F <- sum(a[,i-1]==1&sex==2)
+      if(ER.M>A.M){
+        stop("M is too low. There aren't any males left to be recruited")
       }
-      gamma.prime[i-1] <- ER/A # individual-level recruitment *probability*
-      Ez <- z[,i-1]*phi[i-1] + a[,i-1]*gamma.prime[i-1]
-      z[,i] <- rbinom(M, 1, Ez)
+      if(ER.F>A.F){
+        stop("M is too low. There aren't any females left to be recruited")
+      }
+      gamma.prime.M[i-1] <- ER.M/A.M # individual-level recruitment *probability*
+      gamma.prime.F[i-1] <- ER.F/A.F
+      Ez.M <- 1*(z[,i-1]==1&sex==1)*phi[1] + 1*(a[,i-1]==1&sex==1)*gamma.prime.M[i-1]
+      Ez.F <- 1*(z[,i-1]==1&sex==2)*phi[2] + 1*(a[,i-1]==1&sex==2)*gamma.prime.F[i-1]
+      z[,i] <- rbinom(M, 1, Ez.M)+rbinom(M, 1, Ez.F)
       a[,i] <- apply(z[,1:i]<1, 1, all)
     }
+    RN=cbind(colSums(z==1&sex==1),colSums(z==1&sex==2))
 
     #######Capture process######################
     # Simulate encounter history
@@ -304,12 +323,16 @@ simOpenSCR <-
     if(ACtype%in%c("metamu","metamu2")){
       mu=mu[idx,]
     }
+    sex=sex[idx]
     keep=which(rowSums(y)>0)
     y=y[keep,,]
     s=s[keep,,]
     if(ACtype%in%c("metamu","metamu2")){
       mu=mu[keep,]
     }
+    sex=sex[keep]
+    sexID=sex
+    sexID[rbinom(length(sex),1,pIDsex)==0]=NA
     n=sum(caps>0)
     caps2d=apply(y,c(1,3),sum)
     n2d=colSums(caps2d>0)
@@ -318,17 +341,22 @@ simOpenSCR <-
     }else{
       gamma=gamma
     }
+
     if(!ACtype%in%c("metamu","metamu2")){
       if(!missing(vertices)){
-        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices)
+        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID)
       }else{
-        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype)
+        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sex=sex,sexID=sexID)
       }
     }else{
       if(!missing(vertices)){
-        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices)
+        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID)
       }else{
-        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype)
+        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sex=sex,sexID=sexID)
       }
     }
     return(out)
