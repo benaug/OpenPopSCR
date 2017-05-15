@@ -18,6 +18,11 @@ SCRmcmcOpenRcpp <-
     if(length(K)!=t){
       stop("Must supply a K for each year")
     }
+    if(!missing(dSS)&"vertices"%in%names(data)){
+      rem=which(names(data)=="vertices")
+      data[[rem]]=NULL
+      warning("Discarding vertices since dSS supplied")
+    }
     #If using polygon state space
     if("vertices"%in%names(data)){
       vertices=data$vertices

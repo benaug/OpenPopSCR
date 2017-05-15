@@ -9,6 +9,11 @@ SCRmcmcOpen <-
     for(i in 1:length(X)){
       X[[i]]=as.matrix(X[[i]])
     }
+    if(!missing(dSS)&"vertices"%in%names(data)){
+      rem=which(names(data)=="vertices")
+      data[[rem]]=NULL
+      warning("Discarding vertices since dSS supplied")
+    }
 
     J<-data$J
     maxJ=max(J)
