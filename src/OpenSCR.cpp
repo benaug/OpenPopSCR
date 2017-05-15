@@ -78,7 +78,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerVector tf,NumericMatrix dSS,bool usedSS) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,NumericMatrix dSS,bool usedSS) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];

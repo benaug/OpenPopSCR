@@ -19,36 +19,39 @@
 #' @param obstype a character indicating the observation model "bernoulli" or "poisson"
 #' @param dSS a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 #'
-#' @return  a list with the posteriors for the open population SCR parameters (out), s, and z
+#' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
+#' s1 being meta ACs and s2 being yearly ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
+#' of dimension niter x M x T
 #' @author Ben Augustine, Richard Chandler
 #' @description This function runs the MCMC algorithm for an open population SCR model.  The data list should have the following elements:
-#' 1.  y, a n x J x t capture history where J is the maximum number of traps across years and t is the number of years
-#' 2.  X,  a list with elements that consistes of a matrix with the X and Y trap locations in the first two columns for each year.
+#' 1.  y, a n x J x T capture history where J is the maximum number of traps across years, T is the number of years, and n
+#' is the number of animals captured
+#' 2.  X,  a list with elements that consists of a matrix with the X and Y trap locations in the first two columns for each year.
 #' If the traps do not vary across years, just repeat the same traps in each year
-#' 3.  K, a vector of size t indicating how many capture occasions there were in each year
-#' 4.  J, a vector of size t indicating how many traps there were in each year
+#' 3.  K, a vector of size T indicating how many capture occasions there were in each year
+#' 4.  J, a vector of size T indicating how many traps there were in each year
 #' 5. either buff or vertices.  buff is the fixed buffer for the traps to produce the state space.  It is applied to the minimum and maximum
-#' X and Y locations across years, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
+#' X and Y trap locations across years, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
 #' of a polygonal state space with one polygon in each list element.  If there is just one polygon, the list is of length 1.
 #' If there are many polygons separated by large distances, you should think about the implications of activity centers
 #' possibly being stuck inside the polygons.
-#' 6. tf is an optional list of vectors containing the trap operation information.  Each vector has one element for each trap
+#' 6. tf is an optional list of vectors of length T containing the trap operation information.  Each vector has one element for each trap
 #' and indicates how many occasions each trap was operational.
 #'
 #' inits sets the initial values and determines if parameters are fixed or year-specific. It must have elements "lam0"
 #' "sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal mobile
 #' activity center model will be estimated.  If length(lam0)=1, a single lam0 will be estimated while if length(lam0)=t,
 #' lam0 will be year-specific.  This goes for sigma, gamma, and phi as well, except for gamma and phi length needs to be t-1
-#' or year-specific paramters.  A smart starting value or psi is (hypothesized) N/M.
+#' or year-specific paramters.  A decent starting value for psi is (hypothesized) N/M.
 #'
 #' proppars is a list containing the tuning parameters for the parameters that use a Metropolis-Hastings update.
-#' It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", and "propz". If a parameter is year-specific, it need
+#' It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", and "propz". If a parameter is year-specific, it needs
 #' the appropriate number of proppars. propz is the number of data augmentation z's to update in years 2,...,t, so it should
 #' be of length t-1.  Increasing propz improves mixing (up to a point) but increases computation time. Finally, if you set
 #' an initial value for sigma_t, you need to provide proppars for "s1x", "s1y", and "sigma_t".
 #'
 #' A note on the z samplers.  jointZ=TRUE will update all the z's for each individual at the same time while jointZ=FALSE
-#' will update them sequentially.  For T=3-6ish, you get a greater effective sample size with the joint update than sequential.
+#' will update them sequentially.  For T=3-6ish, you get a greater effective sample size per unit time with the joint update than with the sequential update.
 #' The joint update always mixes better, but takes longer as t increases.
 #'
 #'A note on the activity center models. I think little is known about data requirements for the more complex models at this point or
@@ -57,6 +60,10 @@
 #'ACs leave the state space, but they are still associated with the metamus that stay in the state space.  One could let the ACs
 #'leave the state space in the Markov model, but then density would decrease through time, which seems problematic.  The
 #'metamu2 model seems most sensible to me.  Email me if you have any other sensible models.
+#'
+#'A final note on splitting data sets to get group-specific parameters (e.g. sex).  This will alter the interpretation
+#'of per capita recruitment.  For example, if you run sexes separetly, you are estimating recruitment per number
+#'of males or females in the population, which probably does not make sense.
 #'
 #' @examples
 #' \dontrun{
@@ -149,7 +156,7 @@
 #'plot(mcmc(out$out))
 #'summary(mcmc(out$out))
 #'
-#'#Finally, let's set everything back to fixed and do mobile activty centers between years
+#'#Let's set everything back to fixed and do mobile activty centers between years
 #'#We're using a bivariate normal "metamu2" model.
 #'t=3
 #'N=100
@@ -187,15 +194,15 @@
 #'points(data$s[idx,2,1],data$s[idx,2,2],pch=4,col="yellow",lwd=5,cex=3)
 #'points(data$s[idx,3,1],data$s[idx,3,2],pch=4,col="yellow",lwd=5,cex=3)
 #'
+#'Finally, let's do some MCMC diagnostics
+
+# summary(mcmc(out$out))
 #'}
 #'@export
 
 mcmc.OpenSCR <-
-  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype=obstype,dSS=NA){
+  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      # if(length(dSS)>1){
-      #   stop("Ha!  Discrete SS not yet implemented in Rcpp.  Stuck with R for now. =)")
-      # }
       out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }else{#Don't use Rcpp
       out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)

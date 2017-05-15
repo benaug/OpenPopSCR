@@ -18,7 +18,7 @@ SCRmcmcOpenRcpp <-
     if(length(K)!=t){
       stop("Must supply a K for each year")
     }
-    if(!missing(dSS)&"vertices"%in%names(data)){
+    if(is.na(dSS[1])&"vertices"%in%names(data)){
       rem=which(names(data)=="vertices")
       data[[rem]]=NULL
       warning("Discarding vertices since dSS supplied")
@@ -299,6 +299,8 @@ SCRmcmcOpenRcpp <-
       }
     }
     if(ACtype=="independent"){
+      proppars$s1x=proppars$s1y=0.1 #dummy for Rcpp
+      proppars$sigma_t=0.1
       #update s2s for guys captured each year and put uncaptured guys OFF the GRID so they can get turned on.
       #general not as good alternative, make sure they're not within buff/2 of a trap
       for(l in 1:t){
@@ -323,6 +325,10 @@ SCRmcmcOpenRcpp <-
           }
         }
       }
+    }
+    if(ACtype=="fixed"){
+      proppars$s1x=proppars$s1y=0.1 #dummy for Rcpp
+      proppars$sigma_t=0.1
     }
     if(usedSS){
       #snap everyone back to closest place in state space
@@ -450,7 +456,10 @@ SCRmcmcOpenRcpp <-
       tf2[1:J[l],l]=tf[[l]]
     }
     if(!usedSS){
-      dSS=matrix(1)#dummy to fool rcpp
+      dSS=matrix(0.5,nrow=2,ncol=2)#dummy to fool rcpp
+    }
+    if(is.null(sigma_t)){
+      sigma_t=0.5 #dummy for Rcpp
     }
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime,  phiin, D,lamd, y, z, a,s1,s2,
