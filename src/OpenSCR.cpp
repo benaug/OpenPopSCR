@@ -1265,20 +1265,20 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         for(int l=0; l<t; l++) {
           ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
           ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
-          if(usedSS){
-            double mindist=100000;
-            int idxdist=0;
-            for(int i2=0; i2<NdSS;i2++){
-              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-              if(dists(i2)<mindist){
-                mindist=dists(i2);
-                idxdist=i2;
-              }
-            }
-            ScandX(0)=dSS(idxdist,0);
-            ScandY(0)=dSS(idxdist,1);
-          }
           if(ACtype==2){
+            if(usedSS){
+              double mindist=100000;
+              int idxdist=0;
+              for(int i2=0; i2<NdSS;i2++){
+                dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                if(dists(i2)<mindist){
+                  mindist=dists(i2);
+                  idxdist=i2;
+                }
+              }
+              ScandX(0)=dSS(idxdist,0);
+              ScandY(0)=dSS(idxdist,1);
+            }
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{

@@ -966,11 +966,11 @@ SCRmcmcOpen <-
         for (i in 1:M){
           for(l in 1:t){
             Scand=c(rnorm(1, s2[i,l,1], proppars$s2x), rnorm(1, s2[i,l,2], proppars$s2y))
-            if(usedSS){
-              dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
-              Scand=dSS[which(dists==min(dists)),]
-            }
             if(ACtype=="metamu"){
+              if(usedSS){
+                dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+                Scand=dSS[which(dists==min(dists)),]
+              }
               if(useverts==FALSE){
                 inbox=Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
               }else{
