@@ -19,7 +19,7 @@ Otherwise, size is t-1.  Do not enter a gamma if N for all years specified.}
 \item{phi}{a vector containing the survival rates for each year. If size 1, phi is fixed across years.
 Otherwise, size is t-1.}
 
-\item{lam0}{a vector containing the detection function hazard rate in each year. If size 1, constant rate is assumed.
+\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If size 1, constant rate is assumed.
 Otherwise, size is t, the number of years.
 Otherwise, size is t, the number of years.}
 

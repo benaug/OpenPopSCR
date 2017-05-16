@@ -63,13 +63,13 @@ possibly being stuck inside the polygons.
 and indicates how many occasions each trap was operational.
 
 inits sets the initial values and determines if parameters are fixed or year-specific. It must have elements "lam0"
-"sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal mobile
+"sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal or Markov mobile
 activity center model will be estimated.  If length(lam0)=1, a single lam0 will be estimated while if length(lam0)=t,
 lam0 will be year-specific.  This goes for sigma, gamma, and phi as well, except for gamma and phi length needs to be t-1
 or year-specific paramters.  A decent starting value for psi is (hypothesized) N/M.
 
 proppars is a list containing the tuning parameters for the parameters that use a Metropolis-Hastings update.
-It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", and "propz". If a parameter is year-specific, it needs
+It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", and "propz" (if jointZ=FALSE). If a parameter is year-specific, it needs
 the appropriate number of proppars. propz is the number of data augmentation z's to update in years 2,...,t, so it should
 be of length t-1.  Increasing propz improves mixing (up to a point) but increases computation time. Finally, if you set
 an initial value for sigma_t, you need to provide proppars for "s1x", "s1y", and "sigma_t".
@@ -87,7 +87,8 @@ metamu2 model seems most sensible to me.  Email me if you have any other sensibl
 
 A final note on splitting data sets to get group-specific parameters (e.g. sex).  This will alter the interpretation
 of per capita recruitment.  For example, if you run sexes separetly, you are estimating recruitment per number
-of males or females in the population, which probably does not make sense.
+of males or females in the population, which probably does not make sense.  See the mcmc.OpenSCR() function for
+sex-specific parameters.
 }
 \examples{
 \dontrun{

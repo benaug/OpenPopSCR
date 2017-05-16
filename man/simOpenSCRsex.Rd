@@ -4,23 +4,32 @@
 \alias{simOpenSCRsex}
 \title{Simulate data from a Open population SCR study with sex (or other group of size 2) differences.}
 \usage{
-simOpenSCRsex(N = cbind(c(30, 30), c(35, 45, 55)), pIDsex = 0.75,
-  gamma = NULL, gamma.sex = TRUE, phi = rep(0.8, 2), lam0 = rep(0.2, 2),
-  sigma = rep(0.5, 2), K = rep(10, 3), X = X, t = 3, M = M,
-  sigma_t = NULL, buff = 3, obstype = "bernoulli", ACtype = "fixed",
-  vertices = NA, maxprop = 10000)
+simOpenSCRsex(N = cbind(c(30, 30), c(35, 45, 55)), psex = 0.5,
+  pIDsex = 0.75, gamma = NULL, gamma.sex = TRUE, phi = rep(0.8, 2),
+  lam0 = rep(0.2, 2), sigma = rep(0.5, 2), K = rep(10, 3), X = X,
+  t = 3, M = M, sigma_t = NULL, buff = 3, obstype = "bernoulli",
+  ACtype = "fixed", vertices = NA, maxprop = 10000)
 }
 \arguments{
 \item{N}{a 1 x 2 vector or t x 2 matrix indicating the number of individuals to simulate. Column 1 is males, column 2 is females.
 If only the first year is entered, provide a gamma to determine N in subsequent years.  Otherwise, size is t, the number of years.}
 
-\item{phi}{a vector containing the survival rates for each year. If size 1, no sex difference is assumed.
+\item{psex}{the probability a row of z will be male.  This does not determine the sex ratio, but may be needed to
+simulate data from very sex-skewed populations without increasing M.}
+
+\item{pIDsex}{the probability that you can ID the sex of a captured individual}
+
+\item{gamma}{a vector containing the per capita recruitment rates for each sex.  If size 1, gamma is the same for each sex.
+Note, this is the number of males recruited per N and number of females recruited per N and each will be smaller than
+the number of individuals recruited per N.}
+
+\item{phi}{a vector containing the survival rates. If size 1, no sex difference is assumed.
 Otherwise, sexes differ.}
 
-\item{lam0}{a vector containing the detection function hazard rate in each year. If size 1, no sex difference is assumed.
+\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If size 1, no sex difference is assumed.
 Otherwise, sexes differ.}
 
-\item{sigma}{a vector containing the spatial scale parameter in each year. If size 1, no sex difference is assumed.
+\item{sigma}{a vector containing the spatial scale parameters. If size 1, no sex difference is assumed.
 Otherwise, sexes differ.  Do not enter a gamma if N for all years specified.}
 
 \item{K}{a vector containing the number of capture occasions in each year}

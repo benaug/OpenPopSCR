@@ -4,7 +4,7 @@ Title: Open Population Spatial Capture-recapture MCMC algorithms
 Version: 0.1.0
 Author: Ben Augustine with some code adapted from Richard Chandler
 Maintainer: Ben Augustine <baugusti@vt.edu>
-Description: This package implements various open population SCR algorithms in R and Rcpp.  Current features include any combination of fixed or year-specific parameters, (potentially multiple) polygonal state spaces, trap operation files, discrete state spaces, bernoulli or poisson observation models, and multiple between year activity center models.  Sex-specific parameters with some latent sexes should be done soon.
+Description: This package implements various open population SCR algorithms in R and Rcpp.  Current features include any combination of fixed or year-specific parameters, (potentially multiple) polygonal state spaces, trap operation files, discrete state spaces, bernoulli or poisson observation models, and multiple between year activity center models.  Sex-specific parameters with potentially some missing sexes are available in mcmc.OpenSCR.sex(), which is not in Rcpp, yet.
     The advantages of this package over using JAGS are ease of use, not needing to know how to code in JAGS, and much faster computation.  The disadvantage is that you might want to do something not currently in the package that you can do in JAGS.  If this is the case, send me an email.
     The main MCMC function is mcmc.OpenSCR where there is a help file with examples.
 License: GPL-2

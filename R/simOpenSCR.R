@@ -8,7 +8,7 @@ e2dist<-function (x, y)
 #' Simulate data from a Open population SCR study.
 #' @param N a vector indicating the number of individuals to simulate. If size 1, provide a gamma to determine N in subsequent years.
 #' Otherwise, size is t, the number of years.
-#' @param lam0 a vector containing the detection function hazard rate in each year. If size 1, constant rate is assumed.
+#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If size 1, constant rate is assumed.
 #' Otherwise, size is t, the number of years.
 #' Otherwise, size is t, the number of years.
 #' @param sigma a vector containing the spatial scale parameter in each year.  If size 1, sigma is fixed across years.

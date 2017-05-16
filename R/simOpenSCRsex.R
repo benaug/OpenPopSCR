@@ -1,21 +1,21 @@
-e2dist<-function (x, y)
-{
-  i <- sort(rep(1:nrow(y), nrow(x)))
-  dvec <- sqrt((x[, 1] - y[i, 1])^2 + (x[, 2] - y[i, 2])^2)
-  matrix(dvec, nrow = nrow(x), ncol = nrow(y), byrow = F)
-}
 #' Simulate data from a Open population SCR study with sex (or other group of size 2) differences.
 #' @param N a 1 x 2 vector or t x 2 matrix indicating the number of individuals to simulate. Column 1 is males, column 2 is females.
 #' If only the first year is entered, provide a gamma to determine N in subsequent years.  Otherwise, size is t, the number of years.
-#' @param lam0 a vector containing the detection function hazard rate in each year. If size 1, no sex difference is assumed.
+#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If size 1, no sex difference is assumed.
 #' Otherwise, sexes differ.
-#' @param sigma a vector containing the spatial scale parameter in each year. If size 1, no sex difference is assumed.
+#' @param sigma a vector containing the spatial scale parameters. If size 1, no sex difference is assumed.
 #' Otherwise, sexes differ.  Do not enter a gamma if N for all years specified.
-#' @param phi a vector containing the survival rates for each year. If size 1, no sex difference is assumed.
+#' @param phi a vector containing the survival rates. If size 1, no sex difference is assumed.
 #' Otherwise, sexes differ.
+#' @param gamma a vector containing the per capita recruitment rates for each sex.  If size 1, gamma is the same for each sex.
+#' Note, this is the number of males recruited per N and number of females recruited per N and each will be smaller than
+#' the number of individuals recruited per N.
 #' @param K  a vector containing the number of capture occasions in each year
 #' @param X a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
 #' the number of traps in each year.
+#' @param psex the probability a row of z will be male.  This does not determine the sex ratio, but may be needed to
+#' simulate data from very sex-skewed populations without increasing M.
+#' @param pIDsex the probability that you can ID the sex of a captured individual
 #' @param buff the distance to buffer the trapping array in the X and Y dimensions to produce the state space
 #' @param obstype observation type, either "bernoulli" or "poisson"
 #' @param ACtype Type of activity centers.  "fixed" don't move between years, "metamu" assume a bivariate normal distribution
@@ -32,7 +32,7 @@ e2dist<-function (x, y)
 #' @export
 
 simOpenSCRsex <-
-  function(N=cbind(c(30,30),c(35,45,55)),pIDsex=0.75,gamma=NULL,gamma.sex=TRUE,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
+  function(N=cbind(c(30,30),c(35,45,55)),psex=0.5,pIDsex=0.75,gamma=NULL,gamma.sex=TRUE,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
            obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000){
     #Check for user errors
     if(!is.matrix(N)==1&is.null(gamma)){
@@ -348,15 +348,15 @@ simOpenSCRsex <-
                   phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID)
       }else{
         out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sex=sex,sexID=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID)
       }
     }else{
       if(!missing(vertices)){
         out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sexfull=sex,sex=sexID)
       }else{
         out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sex=sex,sexID=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID)
       }
     }
     return(out)
