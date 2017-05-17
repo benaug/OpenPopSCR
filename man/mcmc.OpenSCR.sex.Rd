@@ -113,7 +113,7 @@ nburn=0
 nthin=1
 proppars=list(lam0=c(0.075,0.115),sigma=c(0.055,0.045),gamma=c(0.115,0.085),s1x=0.4,s1y=0.4,s2x=0.5,s2y=0.5,sigma_t=c(0.04,0.03),propz=c(20,20),sex=100)
 out=mcmc.OpenSCR.sex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,ACtype=ACtype,
-                   keepACs=TRUE,jointZ=FALSE)
+                   keepACs=TRUE,jointZ=TRUE)
 plot(mcmc(out$out))
 see the help file of mcmc.OpenSCR for examples with other ACtypes and for some MCMC tips.
 }

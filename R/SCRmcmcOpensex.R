@@ -76,6 +76,9 @@ SCRmcmcOpensex <-
     phi=inits$phi
     psi=inits$psi
     psex=inits$psex
+    if(is.null(psex)){
+      stop("must supply initial value for psex")
+    }
 
     #Check proppars
     if(jointZ==FALSE&(length(proppars$propz)!=(t-1))){
@@ -103,6 +106,9 @@ SCRmcmcOpensex <-
       if(is.null(sigma_t)){
         stop("must supply inits$sigma_t if ACtype is metamu or markov")
       }
+    }
+    if(is.null(proppars$sex)){
+      stop("must enter a proppar for sex update")
     }
     sexparms=vector("list")
     if(length(lam0)==1){
@@ -266,7 +272,7 @@ SCRmcmcOpensex <-
       ll.z[,l]=dbinom(z[,l], 1, Ez[,l-1], log=TRUE)
     }
     if(any(c(gamma.primeM,gamma.primeF)>1)){
-      stop("raise M")
+      stop("raise M or lower gamma inits")
     }
     ll.z.cand=ll.z
     gamma.primeM.cand=gamma.primeM
@@ -1079,8 +1085,8 @@ SCRmcmcOpensex <-
       }
 
       #update
-      nmale=sum(sex==1&z[,1]==1)
-      psex <- rbeta(1, 1+nmale, 1+N[1]-nmale)
+      nfemale=sum(sex==2&z[,1]==1)
+      psex <- rbeta(1, 1+nfemale, 1+N[1]-nfemale)
       ll.sex=dbinom(sex-1, 1, psex, log=TRUE)
       Nm=colSums(z==1&sex==1)
       Nf=colSums(z==1&sex==2)
