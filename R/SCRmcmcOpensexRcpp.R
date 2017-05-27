@@ -200,7 +200,13 @@ SCRmcmcOpensexRcpp <-
         if(nleftM>length(candsM)){
           nleftM=length(candsM)
         }
-        pick=sample(candsM,nleftM)
+        if(length(candsM)>1){
+          pick=sample(candsM,nleftM)
+        }else if(length(candsM)==1&nleftM==1){
+          pick=candsM
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0 #no longer available for recruit on any occasion
       }else{
@@ -217,7 +223,13 @@ SCRmcmcOpensexRcpp <-
         if(nleftF>length(candsF)){
           nleftF=length(candsF)
         }
-        pick=sample(candsF,nleftF)
+        if(length(candsF)>1){
+          pick=sample(candsF,nleftF)
+        }else if(length(candsF)==1&nleftF==1){
+          pick=candsF
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0 #no longer available for recruit on any occasion
       }else{
@@ -238,7 +250,13 @@ SCRmcmcOpensexRcpp <-
         if(nleftM>length(candsM)){
           nleftM=length(candsM)
         }
-        pick=sample(candsM,nleftM)
+        if(length(candsM)>1){
+          pick=sample(candsM,nleftM)
+        }else if(length(candsM)==1&nleftM==1){
+          pick=candsM
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0
       }
@@ -248,7 +266,13 @@ SCRmcmcOpensexRcpp <-
         if(nleftF>length(candsF)){
           nleftF=length(candsF)
         }
-        pick=sample(candsF,nleftF)
+        if(length(candsF)>1){
+          pick=sample(candsF,nleftF)
+        }else if(length(candsF)==1&nleftF==1){
+          pick=candsF
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0
       }

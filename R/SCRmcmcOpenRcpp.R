@@ -153,7 +153,7 @@ SCRmcmcOpenRcpp <-
 
     for(i in 2:t){
       #Recruitment
-      nrecruit=round(sum(z[,i-1])*gammasim[i-1])
+      nrecruit=round(sum(z[,i-1])*gammasim[i-1])#how many should we recruit?
       recruits=which(z[1:n,i-1]==0&z[1:n,i]==1)#who is already recruited based on y constraints?
       a[which(z[,i]==1),i:t]=0 #anyone alive in time t can't be recruited
       nleft=nrecruit-length(recruits)
@@ -163,11 +163,17 @@ SCRmcmcOpenRcpp <-
         if(nleft>length(cands)){
           nleft=length(cands)
         }
-        pick=sample(cands,nleft)
+        if(length(cands)>1){
+          pick=sample(cands,nleftM)
+        }else if(length(cands)==1&nleft==1){
+          pick=cands
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0 #no longer available for recruit on any occasion
       }else{
-        warning("Should probably raise M")
+        warning("Can't initialize all E[recruits] given initial value for gamma. Should probably raise M?")
       }
       #Survival
       nlive=rbinom(1,sum(z[,i-1]),phisim[i-1])#How many to live
@@ -179,6 +185,13 @@ SCRmcmcOpenRcpp <-
         cands=cands[!cands%in%1:n]
         if(nleft>length(cands)){
           nleft=length(cands)
+        }
+        if(length(cands)>1){
+          pick=sample(cands,nleftM)
+        }else if(length(cands)==1&nleft==1){
+          pick=cands
+        }else{
+          next
         }
         pick=sample(cands,nleft)
         z[pick,i]=1

@@ -164,7 +164,13 @@ SCRmcmcOpen <-
         if(nleft>length(cands)){
           nleft=length(cands)
         }
-        pick=sample(cands,nleft)
+        if(length(cands)>1){
+          pick=sample(cands,nleftM)
+        }else if(length(cands)==1&nleft==1){
+          pick=cands
+        }else{
+          next
+        }
         z[pick,i]=1
         a[pick,i:t]=0 #no longer available for recruit on any occasion
       }else{
@@ -180,6 +186,13 @@ SCRmcmcOpen <-
         cands=cands[!cands%in%1:n]
         if(nleft>length(cands)){
           nleft=length(cands)
+        }
+        if(length(cands)>1){
+          pick=sample(cands,nleftM)
+        }else if(length(cands)==1&nleft==1){
+          pick=cands
+        }else{
+          next
         }
         pick=sample(cands,nleft)
         z[pick,i]=1
