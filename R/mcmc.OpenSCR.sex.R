@@ -9,14 +9,30 @@
 #' @param keepACs a logical indicating whether or not to keep the posteriors for z, s
 #' @param jointZ a logical indicating whether you want to use the sequential or joint z update.
 #' @param Rcpp a logical indicating whether or not to use Rcpp
-#' @param ACtype a character indicating the model for between year activity center dependence. 'fixed' assumes activity centers are uniformly
-#' distributed across the state space and do not move between years.  'independent" assumes activity centers for each year are uniformly
-#' distributed across the state space, implying no dependence of activity centers between years. "markov" assumes activity centers in the
-#' first year are uniformly distributed across the state space and activity centers in year l is a bivariate normal draw from N(s_{i,l-1},sigma_t).
-#' "metamu" assumes animals have meta activity centers which are distributed uniformly across the landscape and the realized yearly activity
-#' centers are a bivariate normal draw from N(mu_i,sigma_t), but must stay in the state space.  "metamu2" enforces the metamus to stay in
-#' the state space, but the yearly ACs may leave.
+#' @param ACtype a character string indicating the activity center model.  ACtypes can be divided into two types, those that operate on both
+#' continuous and discrete state spaces and those that operate only on
+#' discrete state spaces.  First, those operating on both.  1.  "fixed": activity centers do not move between years
+#' 2.  "independent": activity centers for each individual are independent between years (e.g. random population mixing).
+#' Second, continuous state space models:  3. "metamu": yearly activity centers follow a bivariate normal distribution
+#' around a meta activity center with sigma_t determining the spread of yearly activity centers around the meta activity center.
+#' Yearly activity centers are required to stay inside the state space  4. "metamu2": is the same as "metamu" except only the
+#' meta activity centers are required to stay inside the state space.  The yearly ACs float around nearby the state space,
+#' linked to their meta activity center.  5. "markov": activity centers in year t+1 are a bivariate normal draw centered
+#' around the activity center in year t (but must stay within the state space).  If using a discrete state space,
+#' activity centers are updated in continuous space and snapped to the discrete state space.  This seems to work fine
+#' for fixed and independent activity center models, but the performance of the others are still under investigation.
+#' If modeling movement between years on a discrete state space, I suggest using the option below.
+#'
+#' ACtypes operating only on discrete state spaces are currently limited to
+#' "markov2":  activity centers in year t+1 follow an exponential dispersal kernel centered at the
+#' activity center in year t; however the availability of dispersal distances in the state space are factored into the
+#' dispersal decision.  This will be formally described elsewhere, but uses use vs. availability ideas to correct for
+#' restricted availabilities of dispersal distances.
 #' @param obstype a character indicating the observation model "bernoulli" or "poisson"
+#' @param dualACup a logical to be used with discrete state spaces indicating whether a second, interpatch activity
+#' center proposal is used.  This prevents activity centers from being stuck inside patches that are too far apart for
+#' the typical continuous space activity center update to produce patch jumps.  This is still experimental, but I think it
+#' will be important for movement models on patchy state spaces.
 #' @param dSS a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 #' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
 #' s1 being meta ACs and s2 being yearly ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
@@ -49,8 +65,10 @@
 #' It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", "propz" (if jointZ=FALSE), and "sex". If a parameter is sex-specific, it needs
 #' two proppars. propz is the number of data augmentation z's to update in years 2,...,t, so it should
 #' be of length t-1.  Increasing propz improves mixing (up to a point) but increases computation time.  The sex element
-#' determines how many latent sexes are updated on each iteration.   Finally, if you set an initial value for
-#' sigma_t, you need to provide proppars for "s1x", "s1y", and "sigma_t".
+#' determines how many latent sexes are updated on each iteration.  If you set an initial value for
+#' sigma_t, you need to provide proppars for "s1x", "s1y", and "sigma_t".  If you are using the dual AC update, you
+#' need to specify an element called "dualAC" which indicates how often the patch AC update occurs. It will occur every
+#' dualAC iteration.
 #'
 #' A note on the z samplers.  jointZ=TRUE will update all the z's for each individual at the same time while jointZ=FALSE
 #' will update them sequentially.  For T=3-6ish, you get a greater effective sample size per unit time with the joint update than with the sequential update.
@@ -98,6 +116,7 @@ mcmc.OpenSCR.sex <-
   function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,
            Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
     if(Rcpp==TRUE){ #Do we use Rcpp?
+      stop("Rcpp currently disabled for this sampler.  It needs to be updated.")
       out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }else{#Don't use Rcpp
       out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)

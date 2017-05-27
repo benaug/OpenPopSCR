@@ -50,7 +50,7 @@ square or rectangular, continuous state space.}
 \item{obstype}{a character string indicating the observation model, either "bernoulli" or "poisson"}
 
 \item{ACtype}{a character string indicating the activity center model.  ACtypes can be divided into three types, those that operate on both
-continuous and discrete state spaces, those operating only on continuous state spaces and those operating only on
+continuous and discrete state spaces, those that operate only on continuous state spaces and those that operate only on
 discrete state spaces.  First, those operating on both.  1.  "fixed": activity centers do not move between years
 2.  "independent": activity centers for each individual are independent between years (e.g. random population mixing).
 Second, continuous state space models:  1. "metamu": yearly activity centers follow a bivariate normal distribution
