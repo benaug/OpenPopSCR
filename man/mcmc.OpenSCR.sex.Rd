@@ -6,7 +6,8 @@
 \usage{
 mcmc.OpenSCR.sex(data, niter = 1000, nburn = 0, nthin = 1, K = NA,
   M = NA, inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
-  Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA)
+  Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
+  dualACup = FALSE)
 }
 \arguments{
 \item{data}{a list produced by simOpenSCR or in the same format}

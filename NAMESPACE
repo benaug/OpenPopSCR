@@ -1,6 +1,7 @@
 export('simOpenSCR')
 export('simOpenSCRsex')
 export('inout')
+export('e2dist')
 export('SCRmcmcOpen')
 export('SCRmcmcOpenRcpp')
 export('mcmc_Open')

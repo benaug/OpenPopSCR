@@ -9,3 +9,7 @@ mcmc_Open <- function(lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1,
     .Call('OpenPopSCR_mcmc_Open', PACKAGE = 'OpenPopSCR', lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS)
 }
 
+mcmc_Open_sex <- function(lam0, sigma, gamma, gammaprimeM, gammaprimeF, phi, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex) {
+    .Call('OpenPopSCR_mcmc_Open_sex', PACKAGE = 'OpenPopSCR', lam0, sigma, gamma, gammaprimeM, gammaprimeF, phi, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex)
+}
+

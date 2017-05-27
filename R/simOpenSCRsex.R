@@ -1,31 +1,48 @@
 #' Simulate data from a Open population SCR study with sex (or other group of size 2) differences.
 #' @param N a 1 x 2 vector or t x 2 matrix indicating the number of individuals to simulate. Column 1 is males, column 2 is females.
-#' If only the first year is entered, provide a gamma to determine N in subsequent years.  Otherwise, size is t, the number of years.
-#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If size 1, no sex difference is assumed.
-#' Otherwise, sexes differ.
-#' @param sigma a vector containing the spatial scale parameters. If size 1, no sex difference is assumed.
-#' Otherwise, sexes differ.  Do not enter a gamma if N for all years specified.
-#' @param phi a vector containing the survival rates. If size 1, no sex difference is assumed.
-#' Otherwise, sexes differ.
-#' @param gamma a vector containing the per capita recruitment rates for each sex.  If size 1, gamma is the same for each sex.
-#' Note, this is the number of males recruited per N and number of females recruited per N and each will be smaller than
-#' the number of individuals recruited per N.
+#' If only the first year is entered, provide a gamma to determine E[N] in subsequent years to simulate realized N, a random
+#' variable.  Otherwise, nrow(N)=t, the number of years.  Do not enter a gamma if N for all years specified.
+#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If length 1, no sex difference is assumed.
+#' If length 2, sexes differ.
+#' @param sigma a vector containing the detection function spatial scale parameters. If length 1, no sex difference is assumed.
+#' If length 2, sexes differ.
+#' @param phi a vector containing the survival probabilities. If length 1, no sex difference is assumed.
+#' If length 2, sexes differ.
+#' @param gamma a vector containing the per capita recruitment rates for each sex.  If length 1, gamma is the same for each sex.
+#' If length 2, sexes differ.  Note, this is the number of males recruited per total N and number of females recruited per
+#' total N and each will be smaller than the (sex agnostic) number of individuals recruited per total N.
 #' @param K  a vector containing the number of capture occasions in each year
 #' @param X a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
 #' the number of traps in each year.
-#' @param psex the probability a row of z will be male.  This does not determine the sex ratio, but may be needed to
-#' simulate data from very sex-skewed populations without increasing M.
-#' @param pIDsex the probability that you can ID the sex of a captured individual
-#' @param buff the distance to buffer the trapping array in the X and Y dimensions to produce the state space
-#' @param obstype observation type, either "bernoulli" or "poisson"
-#' @param ACtype Type of activity centers.  "fixed" don't move between years, "metamu" assume a bivariate normal distribution
-#' with a meta mu and sigma_t with yearly activity centers required to stay inside the state space , "metamu2", is
-#' the same as "metamu" except only meta mus are required to stay inside the state space.  markov" assumes activity
-#' centers in year t+1 is a bivariate normal draw centered around the activity center in year t (but must stay within
-#' the state space), and "independent" assumes animals randomly mix between years.
-#' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov".  If size 1, no sex difference is assumed.
-#' Otherwise, sexes differ.
+#' @param psex a numeric indicating the probability a row of z (M x t) will be male.  This does not determine the sex ratio, but may be needed to
+#' simulate data from very sex-skewed populations without increasing M.  For most populations, psex=0.5 should work well.
+#' @param pIDsex a numeric indicating the probability that you can ID the sex of a captured individual.
+#' @param buff a numeric indicating the distance to buffer the trapping array in the X and Y dimensions to produce the state space if using a
+#' square or rectangular, continuous state space.
+#' @param obstype a character string indicating the observation model, either "bernoulli" or "poisson"
+#' @param ACtype a character string indicating the activity center model.  ACtypes can be divided into three types, those that operate on both
+#' continuous and discrete state spaces, those operating only on continuous state spaces and those operating only on
+#' discrete state spaces.  First, those operating on both.  1.  "fixed": activity centers do not move between years
+#' 2.  "independent": activity centers for each individual are independent between years (e.g. random population mixing).
+#' Second, continuous state space models:  1. "metamu": yearly activity centers follow a bivariate normal distribution
+#' around a meta activity center with sigma_t determining the spread of yearly activity centers around the meta activity center.
+#' Yearly activity centers are required to stay inside the state space  2. "metamu2": is the same as "metamu" except only the
+#' meta activity centers are required to stay inside the state space.  The yearly ACs float around nearby the state space,
+#' linked to their meta activity center.  3. "markov": activity centers in year t+1 are a bivariate normal draw centered
+#' around the activity center in year t (but must stay within the state space).  Finally, the discrete state space ACtype,
+#' currently limited to "markov2":  activity centers in year t+1 follow an exponential dispersal kernel centered at the
+#' activity center in year t; however the availability of dispersal distances in the state space are factored into the
+#' dispersal decision.  This will be formally described elsewhere, but uses use vs. availability ideas to correct for
+#' restricted availabilities of dispersal distances.
+#' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", "markov",
+#' and "markov2".  If size 1, no sex difference is assumed. Otherwise, sexes differ.  In "markov2", sigma_t is the exponential
+#' scale parameter
 #' @param M an integer indicating the level of data augmentation to use during simulation.
+#' @param vertices an optional list of polygon vertices to use for the state space.  Each list element should be a matrix with 2
+#' columns, corresponding to the X and Y coordinates of polygon vertices.  The vertices must close the polygon (e.g. the first
+#' and last vertices should be the same).  Cannot enter both vertices and dSS.
+#' @param dSS an optional matrix of discrete state space locations.  The matrix should have 2 columns corresponding to
+#' the X and Y coordinates of each state space element.  Cannot enter both vertices and dSS.
 #' @return a list containing the capture history, activity centers, trap object, and several other data objects and summaries.
 #' @description This function simulates data from an open population SCR model.
 #' @author Ben Augustine
@@ -33,7 +50,7 @@
 
 simOpenSCRsex <-
   function(N=cbind(c(30,30),c(35,45,55)),psex=0.5,pIDsex=0.75,gamma=NULL,gamma.sex=TRUE,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
-           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000){
+           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,dSS=NA){
     #Check for user errors
     if(!is.matrix(N)==1&is.null(gamma)){
       stop("Must provide gamma if N is a vector")
@@ -49,22 +66,39 @@ simOpenSCRsex <-
     if(length(X)!=t){
       stop("Must supply a X (trap locations) for each year")
     }
-    if((ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&is.null(sigma_t)){
-      stop("If ACtype is metamu, metamu2, or markov, must specify sigma_t")
+    if((ACtype%in%c("metamu","metamu2","markov","markov2"))&is.null(sigma_t)){
+      stop("If ACtype is metamu, metamu2, markov or markov2, must specify sigma_t")
     }
-    if(!(ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&!is.null(sigma_t)){
-      stop("ACtype must be metamu, metamu2, or markov when inputting a sigma_t")
+    if(!(ACtype%in%c("metamu","metamu2","markov","markov2"))&!is.null(sigma_t)){
+      warning("Ignoring sigma_t because ACtype is not metamu, metamu2, markov, or markov2")
+    }
+    if(is.data.frame(dSS)){
+      dSS=as.matrix(dSS)
+    }
+    if(ACtype=="markov2"){
+      if(is.na(dSS[1])){
+        stop("If ACtype is markov2, must input a discrete state space")
+      }
+      if(!is.na(vertices)){
+        warning("Ignoring vertices since ACtype is markov2")
+      }
     }
     storeparms=list(N=N,gamma=gamma,lam0=lam0,sigma=sigma,phi=phi)
-
     J=unlist(lapply(X,nrow))
     maxJ=max(J)
     #Get state space extent such that buffer is at least buff on all grids
     #minmax=rbind(apply(X[[1]],2,min),apply(X[[1]],2,max))
     useverts=!is.na(vertices)[1]
+    usedSS=!is.na(dSS)[1]
+    if(useverts&usedSS){
+      stop("Cannot input both vertices and dSS")
+    }
     if(useverts){
       if(!is.list(vertices)){
         stop("vertices must be a list")
+      }
+      if(any(!unlist(lapply(poly,is.matrix)))){
+        stop("not all vertices list elements are matrices")
       }
     }
     if(!useverts){
@@ -102,6 +136,9 @@ simOpenSCRsex <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        NdSS=nrow(dSS)
+        mu=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
@@ -121,6 +158,8 @@ simOpenSCRsex <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using vertices in continuous space")
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
@@ -158,6 +197,8 @@ simOpenSCRsex <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using vertices in continuous space")
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
@@ -176,12 +217,14 @@ simOpenSCRsex <-
       if(useverts){
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
         for(i in 1:M){
-          inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
+          inside=any(unlist(lapply(vertices,function(x){inout(s[i,1,],x)})))
           while(inside==FALSE){
-            s[,i,]=c(runif(1, xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-            inside=any(unlist(lapply(vertices,function(x){inout(s[,i,],x)})))
+            s[i,1,]=c(runif(1, xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+            inside=any(unlist(lapply(vertices,function(x){inout(s[i,1,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using markov2 with dSS or vertices in continuous space with markov")
       }else{
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
       }
@@ -211,10 +254,29 @@ simOpenSCRsex <-
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
         lamd[,,i]=lam0[sex[i]]*exp(-D[,,i]^2/(2*sigma[sex[i]]*sigma[sex[i]]))
       }
+    }else if(ACtype=="markov2"){
+      #initial locs
+      if(usedSS==FALSE){
+        stop("must enter dSS with ACtype=markov2")
+      }
+      NdSS=nrow(dSS)
+      s[,1,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2] #initial locations
+      for(l in 2:t){
+        dists=e2dist(s[,l-1,],dSS[,1:2])
+        for(i in 1:M){
+          probs=dexp(dists[i,],1/sigma_t[sex[i]])
+          probs=probs/sum(probs)
+          s[i,l,]=dSS[sample(1:NdSS,1,prob=probs),1:2]
+        }
+      }
+      for(l in 1:t){
+        D[,1:nrow(X[[l]]),l]=e2dist(s[,l,],X[[l]])
+        lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
+      }
     }else if(ACtype=="independent"){
-      for(i in 1:t){
-        s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
-        if(useverts){
+      if(useverts){
+        for(i in 1:t){
+          s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
           countout=0
           for(j in 1:M){
             inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
@@ -229,10 +291,18 @@ simOpenSCRsex <-
             }
           }
         }
+      }else if(usedSS){
+        NdSS=nrow(dSS)
+        for(l in 1:t){
+          s[,l,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
+        }
+      }else{
+        s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
+      }
+      for(i in 1:t){
         D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
         lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
       }
-
     }else{
       stop("ACtype not recognized")
     }

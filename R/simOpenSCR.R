@@ -53,9 +53,12 @@ simOpenSCR <-
       stop("If ACtype is metamu, metamu2, or markov, must specify sigma_t")
     }
     if(!(ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&!is.null(sigma_t)){
-      stop("ACtype must be metamu, metamu2, or markov when inputting a sigma_t")
+      warning("Ignoring sigma_t because ACtype is not metamu, metamu2, or markov")
     }
     storeparms=list(N=N,gamma=gamma,lam0=lam0,sigma=sigma,phi=phi)
+    # if(!is.na(dSS[1])){
+    #   usedSS=TRUE
+    # }
 
     J=unlist(lapply(X,nrow))
     maxJ=max(J)
@@ -66,7 +69,13 @@ simOpenSCR <-
       if(!is.list(vertices)){
         stop("vertices must be a list")
       }
+      if(any(!unlist(lapply(poly,is.matrix)))){
+        stop("not all vertices list elements are matrices")
+      }
     }
+    # if(usedSS==TRUE&useverts){
+    #   warning("ignoring vertices since dSS supplied")
+    # }
     if(!useverts){
       minmax=array(NA,dim=c(length(X),2,2))
       for(i in 1:length(X)){
@@ -169,10 +178,10 @@ simOpenSCR <-
       if(useverts){
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
         for(i in 1:M){
-          inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
+          inside=any(unlist(lapply(vertices,function(x){inout(s[i,1,],x)})))
           while(inside==FALSE){
-            s[,i,]=c(runif(1, xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-            inside=any(unlist(lapply(vertices,function(x){inout(s[,i,],x)})))
+            s[i,1,]=c(runif(1, xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+            inside=any(unlist(lapply(vertices,function(x){inout(s[i,1,],x)})))
           }
         }
       }else{

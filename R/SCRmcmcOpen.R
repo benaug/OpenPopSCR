@@ -9,7 +9,7 @@ SCRmcmcOpen <-
     for(i in 1:length(X)){
       X[[i]]=as.matrix(X[[i]])
     }
-    if(is.na(dSS[1])&"vertices"%in%names(data)){
+    if(!is.na(dSS[1])&"vertices"%in%names(data)){
       rem=which(names(data)=="vertices")
       data[[rem]]=NULL
       warning("Discarding vertices since dSS supplied")
