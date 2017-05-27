@@ -34,6 +34,8 @@
 #' the typical continuous space activity center update to produce patch jumps.  This is still experimental, but I think it
 #' will be important for movement models on patchy state spaces.
 #' @param dSS a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
+#' If using the patch activity center update, number the patches and then add a column with a number for each
+#' dSS row indicating which patch the dSS element belongs to.
 #' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
 #' s1 being meta ACs and s2 being yearly ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
 #' of dimension niter x M x T.  Posteriors for the sex of each individual could be returned--email me if you want this.
