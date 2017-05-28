@@ -5,7 +5,7 @@
 \title{Simulate data from a Open population SCR study with sex (or other group of size 2) differences.}
 \usage{
 simOpenSCRsex(N = cbind(c(30, 30), c(35, 45, 55)), psex = 0.5,
-  pIDsex = 0.75, gamma = NULL, gamma.sex = TRUE, phi = rep(0.8, 2),
+  pIDsex = 0.75, gamma = NULL, phi = rep(0.8, 2), delta_t = NA,
   lam0 = rep(0.2, 2), sigma = rep(0.5, 2), K = rep(10, 3), X = X,
   t = 3, M = M, sigma_t = NULL, buff = 3, obstype = "bernoulli",
   ACtype = "fixed", vertices = NA, maxprop = 10000, dSS = NA)

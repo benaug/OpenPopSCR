@@ -165,7 +165,7 @@ SCRmcmcOpen <-
           nleft=length(cands)
         }
         if(length(cands)>1){
-          pick=sample(cands,nleftM)
+          pick=sample(cands,nleft)
         }else if(length(cands)==1&nleft==1){
           pick=cands
         }else{
@@ -188,7 +188,7 @@ SCRmcmcOpen <-
           nleft=length(cands)
         }
         if(length(cands)>1){
-          pick=sample(cands,nleftM)
+          pick=sample(cands,nleft)
         }else if(length(cands)==1&nleft==1){
           pick=cands
         }else{

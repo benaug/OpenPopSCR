@@ -52,7 +52,9 @@ restricted availabilities of dispersal distances.}
 
 \item{obstype}{a character indicating the observation model "bernoulli" or "poisson"}
 
-\item{dSS}{a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations}
+\item{dSS}{a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
+If using the patch activity center update, number the patches and then add a column with a number for each
+dSS row indicating which patch the dSS element belongs to.}
 
 \item{dualACup}{a logical to be used with discrete state spaces indicating whether a second, interpatch activity
 center proposal is used.  This prevents activity centers from being stuck inside patches that are too far apart for

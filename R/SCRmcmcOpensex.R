@@ -1727,20 +1727,22 @@ SCRmcmcOpensex <-
           for(i in 1:M){
             for(l in 1:t){
               if(sum(z[i,l]==1)) next
-              currpatch=dSS[which(s2[i,l,1]==dSS[,1]&s2[i,l,2]==dSS[,2]),3]
-              idx2=which((dSS[,3]!=currpatch))
-              dists=prop.probs=rep(0,NdSS)
-              dists[idx2]=sqrt((s2[i,l,1]-dSS[idx2,1])^2+(s2[i,l,2]-dSS[idx2,2])^2)
-              prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
-              prop.probs=prop.probs/sum(prop.probs)
-              s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
-              Scand=dSS[s2.cell.cand,1:2]
-              backpatch=dSS[s2.cell.cand,3]
-              idx2=which((dSS[,3]!=backpatch))
-              dists=back.probs=rep(0,NdSS)
-              dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
-              back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
-              back.probs=back.probs/sum(back.probs)
+              # currpatch=dSS[which(s2[i,l,1]==dSS[,1]&s2[i,l,2]==dSS[,2]),3]
+              # idx2=which((dSS[,3]!=currpatch))
+              # dists=prop.probs=rep(0,NdSS)
+              # dists[idx2]=sqrt((s2[i,l,1]-dSS[idx2,1])^2+(s2[i,l,2]-dSS[idx2,2])^2)
+              # prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
+              # prop.probs=prop.probs/sum(prop.probs)
+              # s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
+              dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+              s2.cell.cand=sample(1:length(dists),1)
+              # Scand=dSS[s2.cell.cand,1:2]
+              # backpatch=dSS[s2.cell.cand,3]
+              # idx2=which((dSS[,3]!=backpatch))
+              # dists=back.probs=rep(0,NdSS)
+              # dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
+              # back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
+              # back.probs=back.probs/sum(back.probs)
               dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
               if(length(lam0)==1&length(sigma==1)){
                 lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
@@ -1804,7 +1806,8 @@ SCRmcmcOpensex <-
                   ll.s2.cand[i,t-1]=dmultinom(pick,1,probs,log=TRUE)
                 }
               }
-              if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
+              # if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
+              if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
                 D[i,,l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
