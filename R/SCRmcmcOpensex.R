@@ -1,13 +1,30 @@
 SCRmcmcOpensex <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,primary=NA,dualACup=FALSE){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
     X<-data$X
+    if("primary"%in%names(data)){
+      primary=data$primary
+      if(primary[1]==0){
+        stop("first primary period must be a 1 (data recorded)")
+      }
+    }else{
+      primary=rep(1,t)
+    }
+
     #make sure X list elements are matrices
-    for(i in 1:length(X)){
-      X[[i]]=as.matrix(X[[i]])
+    for(l in 1:length(X)){
+      if(primary[l]==1){
+        X[[l]]=as.matrix(X[[l]])
+      }else{
+        for(l in 1:t){
+          if(primary[l]==0){
+            X[[l]]=matrix(nrow=0,ncol=0)
+          }
+        }
+      }
     }
     dSS=as.matrix(dSS)
     if(!is.na(dSS[1])){
@@ -24,7 +41,7 @@ SCRmcmcOpensex <-
     }
     sex=data$sex
     J<-data$J
-    maxJ=max(J)
+    maxJ=max(J,na.rm=TRUE)
     K<-data$K
     n=dim(data$y)[1]
     n2d<-colSums(apply(data$y,c(3),rowSums)>0)
@@ -46,9 +63,19 @@ SCRmcmcOpensex <-
       ylim=c(min(unlist(lapply(vertices,function(x){min(x[,2])}))),max(unlist(lapply(vertices,function(x){max(x[,2])}))))
     }else if("buff"%in%names(data)){
       buff<- data$buff
-      xlim<- c(min(unlist(lapply(X,function(x){min(x[,1])}))),min(unlist(lapply(X,function(x){max(x[,1])}))))+c(-buff, buff)
-      ylim<- c(min(unlist(lapply(X,function(x){min(x[,2])}))),min(unlist(lapply(X,function(x){max(x[,2])}))))+c(-buff, buff)
-      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1])))
+      minmax=array(NA,dim=c(sum(primary==1),2,2))
+      idx=1
+      for(l in 1:length(X)){
+        if(primary[l]==1){
+          minmax[idx,,]=rbind(apply(X[[l]],2,min),apply(X[[l]],2,max))
+          idx=idx+1
+        }
+      }
+      xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
+      xlim=xylim[,1]+c(-buff,buff)
+      ylim=xylim[,2]+c(-buff,buff)
+      vertices=list(rbind(c(xlim[1]-buff,ylim[1]-buff),c(xlim[1]-buff,ylim[2]+buff),
+                          c(xlim[2]+buff,ylim[2]+buff),c(xlim[2]+buff,ylim[1]-buff)))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -59,17 +86,17 @@ SCRmcmcOpensex <-
         stop("If using a trap operation file, must input one for each year")
       }
       for(i in 1:length(X)){
-        if(is.matrix(tf[[i]])){
+        if(is.matrix(tf[[l]])){
           stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
         }
-        if(nrow(X[[i]])!=length(tf[[i]])){
+        if(nrow(X[[l]])!=length(tf[[l]])){
           stop("If using trap operation file, must enter operation for every trap")
         }
       }
     }else{
       tf=vector("list",t)
       for(l in 1:t){
-        tf[[l]]=rep(K[l],nrow(X[[i]]))
+        tf[[l]]=rep(K[l],nrow(X[[l]]))
       }
     }
     #make tf into matrix
@@ -316,9 +343,11 @@ SCRmcmcOpensex <-
     if(!usedSS){
       #make sure all traps are inside a polygon
       for(l in 1:t){
-        for(j in 1:J[l]){
-          if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
-            stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+        if(primary[l]==1){
+          for(j in 1:J[l]){
+            if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
+              stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+            }
           }
         }
       }
@@ -328,9 +357,12 @@ SCRmcmcOpensex <-
       for(i in idx){
         trps=matrix(0,nrow=0,ncol=2)
         for(l in 1:t){ #loop over t to get all cap locs
-          trps<- rbind(trps,X[[l]][y[i,,l]>0,1:2])
+          if(primary[l]==1){
+            trps<- rbind(trps,X[[l]][y[i,,l]>0,1:2])
+          }
         }
-        if(is.matrix(trps)){
+        trps=as.matrix(trps,ncol=2)
+        if(nrow(trps)>1){
           s1[i,]<- trps[1,]
         }else{
           s1[i,]=trps
@@ -369,14 +401,15 @@ SCRmcmcOpensex <-
           for(i in 1:M){
             if(i%in%idx){
               trps<- X[[l]][y[i,,l]>0,1:2]
-              if(is.matrix(trps)){
+              trps=as.matrix(trps,ncol=2)
+              if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
               }else{
                 s2[i,l,]=trps
               }
               inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
               if(!inside){
-                if(is.matrix(trps)){
+                if(nrow(trps)>1){
                   s2[i,l,]<- trps[1,]
                 }else{
                   s2[i,l,]=trps
@@ -409,7 +442,8 @@ SCRmcmcOpensex <-
           for(i in 1:M){
             if(i%in%idx){
               trps<- X[[l]][y[i,,l]>0,1:2]
-              if(is.matrix(trps)){
+              trps=as.matrix(trps,ncol=2)
+              if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
               }else{
                 s2[i,l,]=trps
@@ -431,8 +465,14 @@ SCRmcmcOpensex <-
       idx=which(rowSums(y)>0) #switch for those actually caught to first trap
       for(i in 1:M){
         if(i%in%idx){
-          trps<- X[[l]][rowSums(y[i,,])>0,1:2]
-          if(is.matrix(trps)){
+          trps=matrix(0,nrow=0,ncol=2)
+          for(l in 1:t){ #loop over t to get all cap locs
+            if(primary[l]==1){
+              trps<- rbind(trps,X[[l]][y[i,,l]>0,1:2])
+            }
+          }
+          trps=as.matrix(trps,ncol=2)
+          if(nrow(trps)>1){
             dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
           }else{
             dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
@@ -440,7 +480,7 @@ SCRmcmcOpensex <-
           s1[i,]=dSS[which(dist==min(dist))[1],1:2]
         }
       }
-      #recored s1 dSS
+     #record s1 dSS
       s1.cell=rep(NA,M)
       for(i in 1:M){
         s1.cell[i]=which(dSS[,1]==s1[i,1]&dSS[,2]==s1[i,2])
@@ -450,20 +490,23 @@ SCRmcmcOpensex <-
       for(l in 1:t){
         s2[,l,]=s1
       }
-      s2.cell=matrix(NA,nrow=M,ncol=3)
+      s2.cell=matrix(NA,nrow=M,ncol=t)
       if(ACtype%in%c("independent","metammu","metamu2","markov","markov2")){
         for(l in 1:t){
           s2[,l,]=s1
-          idx=which(rowSums(y[,,l])>0)
-          for(i in 1:M){
-            if(i%in%idx){
-              trps<- X[[l]][y[i,,l]>0,1:2]
-              if(is.matrix(trps)){
-                dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
-              }else{
-                dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
+          if(primary[l]==1){
+            idx=which(rowSums(y[,,l])>0)
+            for(i in 1:M){
+              if(i%in%idx){
+                trps<- X[[l]][y[i,,l]>0,1:2]
+                trps=matrix(trps,ncol=2)
+                if(nrow(trps)>1){
+                  dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
+                }else{
+                  dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
+                }
+                s2[i,l,]=dSS[which(dist==min(dist))[1],1:2]
               }
-              s2[i,l,]=dSS[which(dist==min(dist))[1],1:2]
             }
           }
           #record s2 cells
@@ -558,29 +601,35 @@ SCRmcmcOpensex <-
     }
     idx=1 #for storing output not recorded every iteration
 
-    D=lamd=ll.y=ll.y.cand=array(NA,dim=c(M,maxJ,t))
+    D=lamd=ll.y=ll.y.cand=array(0,dim=c(M,maxJ,t))
     D[is.na(D)]=Inf  #hack to allow years with different J and K to fit in one array
     for(l in 1:t){
-      D[,1:nrow(X[[l]]),l]=e2dist(s2[,l,],X[[l]])
-      if(length(lam0)==2&length(sigma)==2){
-        lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
-      }else if(length(lam0)==1&length(sigma)==2){
-        lamd[,,l]=lam0*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
-      }else if(length(lam0)==2&length(sigma)==1){
-        lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma*sigma))
-      }else{
-        lamd[,,l]=lam0*exp(-D[,,l]^2/(2*sigma*sigma))
+      if(primary[l]==1){
+        D[,1:nrow(X[[l]]),l]=e2dist(s2[,l,],X[[l]])
+        if(length(lam0)==2&length(sigma)==2){
+          lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
+        }else if(length(lam0)==1&length(sigma)==2){
+          lamd[,,l]=lam0*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
+        }else if(length(lam0)==2&length(sigma)==1){
+          lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma*sigma))
+        }else{
+          lamd[,,l]=lam0*exp(-D[,,l]^2/(2*sigma*sigma))
+        }
       }
     }
     #Calculate ll for observation model
     if(obstype=="bernoulli"){
       pd=pd.cand=1-exp(-lamd)
       for(l in 1:t){
-        ll.y[,,l]= dbinom(y[,,l],tf[[l]],pd[,,l]*z[,l],log=TRUE)
+        if(primary[l]==1){
+          ll.y[,,l]= dbinom(y[,,l],tf[[l]],pd[,,l]*z[,l],log=TRUE)
+        }
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
-        ll.y[,,l]= dpois(y[,,l],tf[[l]]*lamd[,,l]*z[,l],log=TRUE)
+        if(primary[l]==1){
+          ll.y[,,l]= dpois(y[,,l],tf[[l]]*lamd[,,l]*z[,l],log=TRUE)
+        }
       }
     }else{
       stop("obstype must be 'bernoulli' or 'poisson'")
@@ -659,11 +708,13 @@ SCRmcmcOpensex <-
               lamd.cand[sex==i,,]<- lam0.cand*exp(-D[sex==i,,]^2/(2*sigma*sigma))
             }
             for(l in 1:t){
-              if(obstype=="bernoulli"){
-                pd.cand[,,l]=1-exp(-lamd.cand[,,l])
-                ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
-              }else{
-                ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+              if(primary[l]==1){
+                if(obstype=="bernoulli"){
+                  pd.cand[,,l]=1-exp(-lamd.cand[,,l])
+                  ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
+                }else{
+                  ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+                }
               }
             }
             ll.y.cand.sum=sum(ll.y.cand)
@@ -689,11 +740,13 @@ SCRmcmcOpensex <-
             lamd.cand<- lam0.cand*exp(-D^2/(2*sigma*sigma))
           }
           for(l in 1:t){
-            if(obstype=="bernoulli"){
-              pd.cand[,,l]=1-exp(-lamd.cand[,,l])
-              ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
-            }else{
-              ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+            if(primary[l]==1){
+              if(obstype=="bernoulli"){
+                pd.cand[,,l]=1-exp(-lamd.cand[,,l])
+                ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
+              }else{
+                ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+              }
             }
           }
           ll.y.cand.sum=sum(ll.y.cand)
@@ -721,11 +774,13 @@ SCRmcmcOpensex <-
               lamd.cand[sex==i,,]<- lam0*exp(-D[sex==i,,]^2/(2*sigma.cand*sigma.cand))
             }
             for(l in 1:t){
-              if(obstype=="bernoulli"){
-                pd.cand[,,l]=1-exp(-lamd.cand[,,l])
-                ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE) #only need to update this year
-              }else{
-                ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE) #only need to update this year
+              if(primary[l]==1){
+                if(obstype=="bernoulli"){
+                  pd.cand[,,l]=1-exp(-lamd.cand[,,l])
+                  ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE) #only need to update this year
+                }else{
+                  ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE) #only need to update this year
+                }
               }
             }
             ll.y.cand.sum=sum(ll.y.cand)
@@ -750,14 +805,16 @@ SCRmcmcOpensex <-
             lamd.cand<- lam0*exp(-D^2/(2*sigma.cand*sigma.cand))
           }
           for(l in 1:t){
-            if(obstype=="bernoulli"){
-              pd.cand[,,l]=1-exp(-lamd.cand[,,l])
-              for(l in 1:t){
-                ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
-              }
-            }else{
-              for(l in 1:t){
-                ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+            if(primary[l]==1){
+              if(obstype=="bernoulli"){
+                pd.cand[,,l]=1-exp(-lamd.cand[,,l])
+                for(l in 1:t){
+                  ll.y.cand[,,l]= dbinom(y[,,l],tf[[l]],pd.cand[,,l]*z[,l],log=TRUE)
+                }
+              }else{
+                for(l in 1:t){
+                  ll.y.cand[,,l]= dpois(y[,,l],tf[[l]]*lamd.cand[,,l]*z[,l],log=TRUE)
+                }
               }
             }
           }
@@ -928,10 +985,12 @@ SCRmcmcOpensex <-
             #Normal stuff
             zt.cand[i]=1-z[i,l]
             at.cand=1*(a[,l-1]==1&zt.cand==0) #who was available on last occasion and not proposed to be captured?
-            if(obstype=="bernoulli"){
-              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*zt.cand[i],log=TRUE)
-            }else{
-              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*zt.cand[i],log=TRUE)
+            if(primary[l]==1){
+              if(obstype=="bernoulli"){
+                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*zt.cand[i],log=TRUE)
+              }else{
+                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*zt.cand[i],log=TRUE)
+              }
             }
             ll.z.cand[i,l] <- dbinom(zt.cand[i], 1, Ez[i,l-1], log=TRUE)
             prior.z=ll.z[i,l]
@@ -988,7 +1047,9 @@ SCRmcmcOpensex <-
             }
             #No ll.sex component for years >1
             if(runif(1) < exp((sum(ll.y.cand[i,,l]) + prior.z.cand) - (sum(ll.y[i,,l]) +prior.z) )) {
-              ll.y[i,,l] <- ll.y.cand[i,,l]
+              if(primary[l]==1){
+                ll.y[i,,l] <- ll.y.cand[i,,l]
+              }
               ll.z[i,l] <- ll.z.cand[i,l]
               if((t>3)&(l<t)){
                 z=z.cand
@@ -1012,7 +1073,7 @@ SCRmcmcOpensex <-
           }
         }
       }else{
-        #jointZ update
+        # jointZ update
         ll_z_possibleM[,1]=ll_z_possibleF[,1]=dbinom(zpossible[,1], 1, psi,log=TRUE)
         #Get likelihood for all possible z histories. Need to update when accepted
         for(l in 2:t){
@@ -1064,11 +1125,15 @@ SCRmcmcOpensex <-
             #update ll.y
             if(obstype=="bernoulli"){
               for(l in 1:t){
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*z.cand[i,l],log=TRUE)
+                if(primary[l]==1){
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,],pd[i,,l]*z.cand[i,l],log=TRUE)
+                }
               }
             }else{
               for(l in 1:t){
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*z.cand[i,l],log=TRUE)
+                if(primary[l]==1){
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd[i,,l]*z.cand[i,l],log=TRUE)
+                }
               }
             }
             #MH step
@@ -1126,11 +1191,15 @@ SCRmcmcOpensex <-
           lamd.cand[i,,]=lam0*exp(-D[i,,]^2/(2*sigma*sigma))
         }
         for(l in 1:t){
-          if(obstype=="bernoulli"){
-            pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-            ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-          }else{
-            ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+          if(primary[l]==1){
+            if(obstype=="bernoulli"){
+              pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+              ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+            }else{
+              ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+            }
+          }else{#might cause a problem later so fix now
+            lamd.cand[i,,l]=0
           }
         }
         #ll.z. changing 1 sex changed gamma.primeM and gamma.primeF all the way through to ll.z for *everyone*
@@ -1332,7 +1401,9 @@ SCRmcmcOpensex <-
           if(inbox){
             dtmp=matrix(Inf,maxJ,t)
             for(l in 1:t){
-              dtmp[1:nrow(X[[l]]),l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+              if(primary[l]==1){
+                dtmp[1:nrow(X[[l]]),l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+              }
             }
             if(length(lam0)==1&length(sigma==1)){
               lamd.cand[i,,]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
@@ -1343,15 +1414,17 @@ SCRmcmcOpensex <-
             }else{
               lamd.cand[i,,]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
             }
-            if(obstype=="bernoulli"){
-              pd.cand[i,,]=1-exp(-lamd.cand[i,,])
-            }
             ll.y.cand[i,,]=ll.y[i,,]
             for(l in 1:t) {
-              if(obstype=="bernoulli"){
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                lamd.cand[i,,l]=0
               }
             }
             if(runif(1) < exp(sum(ll.y.cand[i,,]) -sum(ll.y[i,,]))){
@@ -1387,21 +1460,23 @@ SCRmcmcOpensex <-
               }
             }
             if(inbox) {
-              dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))){
                 s2[i,l, ] <- Scand
@@ -1441,21 +1516,23 @@ SCRmcmcOpensex <-
               inbox=TRUE
             }
             if(inbox){
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))){
@@ -1491,21 +1568,23 @@ SCRmcmcOpensex <-
               }
             }
             if(inbox) {
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               if(ACtype=="markov"){
                 if(l==1){#only ll.s2[i,1] matters
@@ -1593,7 +1672,9 @@ SCRmcmcOpensex <-
             back.probs=back.probs/sum(back.probs)
             dtmp=matrix(Inf,maxJ,t)
             for(l in 1:t){
-              dtmp[1:nrow(X[[l]]),l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+              if(primary[l]==1){
+                dtmp[1:nrow(X[[l]]),l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+              }
             }
             if(length(lam0)==1&length(sigma==1)){
               lamd.cand[i,,]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
@@ -1604,17 +1685,19 @@ SCRmcmcOpensex <-
             }else{
               lamd.cand[i,,]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
             }
-            if(obstype=="bernoulli"){
-              pd.cand[i,,]=1-exp(-lamd.cand[i,,])
-            }
             ll.y.cand[i,,]=ll.y[i,,]
             for(l in 1:t) {
               if(z[i,l]==0)
                 next
-              if(obstype=="bernoulli"){
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                lamd.cand[i,,l]=0
               }
             }
             if(runif(1) < exp(sum(ll.y.cand[i,,]) -sum(ll.y[i,,]))*(back.probs[s1.cell[i]]/prop.probs[s1.cell.cand])){
@@ -1647,21 +1730,23 @@ SCRmcmcOpensex <-
               dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
               back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
               back.probs=back.probs/sum(back.probs)
-              dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,,l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,,l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                 s2[i,l, ] <- Scand
@@ -1693,21 +1778,23 @@ SCRmcmcOpensex <-
               dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
               back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
               back.probs=back.probs/sum(back.probs)
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
@@ -1743,21 +1830,23 @@ SCRmcmcOpensex <-
               # dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
               # back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
               # back.probs=back.probs/sum(back.probs)
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==2&length(sigma)==1){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==1&length(sigma)==2){
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }else{
-                lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==2&length(sigma)==1){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==1&length(sigma)==2){
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }else{
+                  lamd.cand[i,1:nrow(X[[l]]),l]<- lam0[sex[i]]*exp(-dtmp*dtmp/(2*sigma[sex[i]]*sigma[sex[i]]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,,l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,,l] <- dbinom(y[i,,l], tf[[l]][i,], pd.cand[i,,l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,,l] <- dpois(y[i,,l], tf[[l]][i,]*lamd.cand[i,,l]*z[i,l], log=TRUE)
+                }
               }
               if(ACtype=="markov"){
                 if(l==1){#only ll.s2[i,1] matters

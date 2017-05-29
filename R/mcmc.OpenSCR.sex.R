@@ -36,6 +36,8 @@
 #' @param dSS a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 #' If using the patch activity center update, number the patches and then add a column with a number for each
 #' dSS row indicating which patch the dSS element belongs to.
+#' @param primary a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+#' population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.
 #' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
 #' s1 being meta ACs and s2 being yearly ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
 #' of dimension niter x M x T.  Posteriors for the sex of each individual could be returned--email me if you want this.
@@ -116,12 +118,12 @@
 
 mcmc.OpenSCR.sex <-
   function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,
-           Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
+           Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,primary=NA,dualACup=FALSE){
     if(Rcpp==TRUE){ #Do we use Rcpp?
       stop("Rcpp currently disabled for this sampler.  It needs to be updated.")
       out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
     }else{#Don't use Rcpp
-      out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
+      out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,primary=primary,dualACup=dualACup)
     }
     if(keepACs==TRUE){
       if("s2xout"%in%names(out2)){

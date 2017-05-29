@@ -1,6 +1,6 @@
 SCRmcmcOpen <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -13,6 +13,9 @@ SCRmcmcOpen <-
       rem=which(names(data)=="vertices")
       data[[rem]]=NULL
       warning("Discarding vertices since dSS supplied")
+    }
+    if(length(X)!=t){
+      stop("must input traps for each year")
     }
 
     J<-data$J

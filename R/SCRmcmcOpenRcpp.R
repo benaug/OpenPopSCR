@@ -9,6 +9,9 @@ SCRmcmcOpenRcpp <-
     for(i in 1:length(X)){
       X[[i]]=as.matrix(X[[i]])
     }
+    if(length(X)!=t){
+      stop("must input traps for each year")
+    }
     J<-data$J
     maxJ=max(J)
     K<-data$K

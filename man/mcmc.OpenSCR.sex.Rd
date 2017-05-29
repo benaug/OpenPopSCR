@@ -7,7 +7,7 @@
 mcmc.OpenSCR.sex(data, niter = 1000, nburn = 0, nthin = 1, K = NA,
   M = NA, inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
   Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
-  dualACup = FALSE)
+  primary = NA, dualACup = FALSE)
 }
 \arguments{
 \item{data}{a list produced by simOpenSCR or in the same format}
@@ -55,6 +55,9 @@ restricted availabilities of dispersal distances.}
 \item{dSS}{a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 If using the patch activity center update, number the patches and then add a column with a number for each
 dSS row indicating which patch the dSS element belongs to.}
+
+\item{primary}{a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.}
 
 \item{dualACup}{a logical to be used with discrete state spaces indicating whether a second, interpatch activity
 center proposal is used.  This prevents activity centers from being stuck inside patches that are too far apart for

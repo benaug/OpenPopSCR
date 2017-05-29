@@ -49,8 +49,8 @@
 #' @export
 
 simOpenSCRsex <-
-  function(N=cbind(c(30,30),c(35,45,55)),psex=0.5,pIDsex=0.75,gamma=NULL,gamma.sex=TRUE,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
-           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,dSS=NA){
+  function(N=cbind(c(30,30),c(35,45,55)),psex=0.5,pIDsex=0.75,gamma=NULL,phi=rep(0.8,2),lam0=rep(0.2,2),sigma=rep(0.50,2),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
+           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,dSS=NA,primary=NA){
     #Check for user errors
     if(!is.matrix(N)==1&is.null(gamma)){
       stop("Must provide gamma if N is a vector")
@@ -83,6 +83,18 @@ simOpenSCRsex <-
         warning("Ignoring vertices since ACtype is markov2")
       }
     }
+    if(is.na(primary[1])){
+      primary=rep(1,t)
+    }else{
+      for(l in 1:t){
+        if(primary[l]==0){
+          X[[l]]=matrix(nrow=0,ncol=0)
+        }
+      }
+      if(primary[1]==0){
+        stop("first primary period must be a 1 (data recorded)")
+      }
+    }
     storeparms=list(N=N,gamma=gamma,lam0=lam0,sigma=sigma,phi=phi)
     J=unlist(lapply(X,nrow))
     maxJ=max(J)
@@ -102,9 +114,13 @@ simOpenSCRsex <-
       }
     }
     if(!useverts){
-      minmax=array(NA,dim=c(length(X),2,2))
+      minmax=array(NA,dim=c(sum(primary==1),2,2))
+      idx=1
       for(i in 1:length(X)){
-        minmax[i,,]=rbind(apply(X[[i]],2,min),apply(X[[i]],2,max))
+        if(primary[i]==1){
+          minmax[idx,,]=rbind(apply(X[[i]],2,min),apply(X[[i]],2,max))
+          idx=idx+1
+        }
       }
       xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
       xlim=xylim[,1]
@@ -114,7 +130,7 @@ simOpenSCRsex <-
       ylim=c(min(unlist(lapply(vertices,function(x){min(x[,2])}))),max(unlist(lapply(vertices,function(x){max(x[,2])}))))
     }
     s=array(NA,dim=c(M,t,2))
-    D=lamd=array(NA,dim=c(M,maxJ,t))
+    D=lamd=array(0,dim=c(M,maxJ,t))
     sex=rbinom(M,1,psex)+1
     if(length(lam0)==1){
       lam0=rep(lam0,2)
@@ -145,8 +161,10 @@ simOpenSCRsex <-
 
       for(i in 1:t){
         s[,i,]=mu
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        if(primary[i]==1){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        }
       }
     }else if(ACtype=="metamu"){
       if(useverts){
@@ -184,8 +202,10 @@ simOpenSCRsex <-
             }
           }
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        if(primary[i]==1){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        }
       }
     }else if(ACtype=="metamu2"){
       if(useverts){
@@ -207,10 +227,10 @@ simOpenSCRsex <-
           s[j,i,1]=rnorm(1,mu[j,1],sigma_t[sex[j]])
           s[j,i,2]=rnorm(1,mu[j,2],sigma_t[sex[j]])
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-
-        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
-
+        if(primary[i]==1){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        }
       }
 
     }else if(ACtype=="markov"){
@@ -228,8 +248,10 @@ simOpenSCRsex <-
       }else{
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
       }
-      D[,1:nrow(X[[1]]),1]=e2dist(s[,1,],X[[1]])
-      lamd[,,1]=lam0[sex]*exp(-D[,,1]^2/(2*sigma[sex]*sigma[sex]))
+
+        D[,1:nrow(X[[1]]),1]=e2dist(s[,1,],X[[1]])
+        lamd[,,1]=lam0[sex]*exp(-D[,,1]^2/(2*sigma[sex]*sigma[sex]))
+
       for(i in 2:t){
         countout=0
         for(j in 1:M){
@@ -251,8 +273,10 @@ simOpenSCRsex <-
             }
           }
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[sex[i]]*exp(-D[,,i]^2/(2*sigma[sex[i]]*sigma[sex[i]]))
+        if(primary[i]==1){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[sex[i]]*exp(-D[,,i]^2/(2*sigma[sex[i]]*sigma[sex[i]]))
+        }
       }
     }else if(ACtype=="markov2"){
       #initial locs
@@ -270,8 +294,10 @@ simOpenSCRsex <-
         }
       }
       for(l in 1:t){
-        D[,1:nrow(X[[l]]),l]=e2dist(s[,l,],X[[l]])
-        lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
+        if(primary[l]==1){
+          D[,1:nrow(X[[l]]),l]=e2dist(s[,l,],X[[l]])
+          lamd[,,l]=lam0[sex]*exp(-D[,,l]^2/(2*sigma[sex]*sigma[sex]))
+        }
       }
     }else if(ACtype=="independent"){
       if(useverts){
@@ -300,8 +326,10 @@ simOpenSCRsex <-
         s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
       for(i in 1:t){
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        if(primary[i]==1){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
+        }
       }
     }else{
       stop("ACtype not recognized")
@@ -364,17 +392,21 @@ simOpenSCRsex <-
     if(obstype=="bernoulli"){
       pd=1-exp(-lamd)
       for(l in 1:t){
-        for(i in 1:M){
-          for(j in 1:J[l]){
-            y[i,j,l]=rbinom(1,K[l],pd[i,j,l]*z[i,l])
+        if(primary[l]==1){
+          for(i in 1:M){
+            for(j in 1:J[l]){
+              y[i,j,l]=rbinom(1,K[l],pd[i,j,l]*z[i,l])
+            }
           }
         }
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
-        for(i in 1:M){
-          for(j in 1:J[l]){
-            y[i,j,l]=rpois(1,K[l]*lamd[i,j,l]*z[i,l])
+        if(primary[l]==1){
+          for(i in 1:M){
+            for(j in 1:J[l]){
+              y[i,j,l]=rpois(1,K[l]*lamd[i,j,l]*z[i,l])
+            }
           }
         }
       }
@@ -415,18 +447,18 @@ simOpenSCRsex <-
     if(!ACtype%in%c("metamu","metamu2")){
       if(!missing(vertices)){
         out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sex=sex,sexID=sexID,primary=primary)
       }else{
         out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID,primary=primary)
       }
     }else{
       if(!missing(vertices)){
         out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sexfull=sex,sex=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,sexfull=sex,sex=sexID,primary=primary)
       }else{
         out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=RN,z=z,gamma=gamma,
-                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID)
+                  phi=storeparms$phi,obstype=obstype,ACtype=ACtype,sexfull=sex,sex=sexID,primary=primary)
       }
     }
     return(out)
