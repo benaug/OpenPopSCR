@@ -287,7 +287,7 @@ SCRmcmcOpenRcpp <-
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][y[i,,l]>0,1:2]
+            trps<- X[[l]][which(which(y[i,,l]>0)>0),1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
@@ -323,7 +323,7 @@ SCRmcmcOpenRcpp <-
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][y[i,,l]>0,1:2]
+            trps<- X[[l]][which(y[i,,l]>0)>0,1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{

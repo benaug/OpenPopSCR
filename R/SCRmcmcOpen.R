@@ -66,7 +66,7 @@ SCRmcmcOpen <-
     }
     #make tf into matrix
     for(l in 1:t){
-      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J,nrow=M,byrow=TRUE)
+      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
     }
 
 
@@ -232,7 +232,7 @@ SCRmcmcOpen <-
     for(i in idx){
       trps=matrix(0,nrow=0,ncol=2)
       for(j in 1:t){ #loop over t to get all cap locs
-        trps<- rbind(trps,X[[j]][y[i,,j]>0,1:2])
+        trps<- rbind(trps,X[[j]][which(y[i,,j])>0,1:2])
       }
       s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
     }
@@ -288,7 +288,7 @@ SCRmcmcOpen <-
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][y[i,,l]>0,1:2]
+            trps<- X[[l]][which(y[i,,l]>0),1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
@@ -322,7 +322,7 @@ SCRmcmcOpen <-
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][y[i,,l]>0,1:2]
+            trps<- X[[l]][which(y[i,,l]>0),1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
@@ -1014,7 +1014,7 @@ SCRmcmcOpen <-
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t,log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t,log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1155,7 +1155,7 @@ SCRmcmcOpen <-
               }
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1212,7 +1212,7 @@ SCRmcmcOpen <-
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))){
                 s2[i,l, ] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,, l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]

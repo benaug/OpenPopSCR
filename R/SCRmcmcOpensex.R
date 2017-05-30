@@ -101,7 +101,7 @@ SCRmcmcOpensex <-
     }
     #make tf into matrix
     for(l in 1:t){
-      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J,nrow=M,byrow=TRUE)
+      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
     }
 
     ##pull out initial values
@@ -149,6 +149,7 @@ SCRmcmcOpensex <-
     sexparms=vector("list")
     if(length(lam0)==1){
       sexparms$lam0="fixed"
+      # lam0=rep(lam0,2)
     }else{
       sexparms$lam0="sex"
     }
@@ -333,7 +334,7 @@ SCRmcmcOpensex <-
       ll.z[,l]=dbinom(z[,l], 1, Ez[,l-1], log=TRUE)
     }
     if(any(c(gamma.primeM,gamma.primeF)>1)){
-      stop("raise M or lower gamma inits")
+      stop("raise M, lower gamma, phi and/or psi inits")
     }
     ll.z.cand=ll.z
     gamma.primeM.cand=gamma.primeM
@@ -358,7 +359,7 @@ SCRmcmcOpensex <-
         trps=matrix(0,nrow=0,ncol=2)
         for(l in 1:t){ #loop over t to get all cap locs
           if(primary[l]==1){
-            trps<- rbind(trps,X[[l]][y[i,,l]>0,1:2])
+            trps<- rbind(trps,X[[l]][which(y[i,,l]>0),1:2])
           }
         }
         trps=as.matrix(trps,ncol=2)
@@ -400,8 +401,8 @@ SCRmcmcOpensex <-
           idx=which(rowSums(y[,,l])>0) #switch for those actually caught
           for(i in 1:M){
             if(i%in%idx){
-              trps<- X[[l]][y[i,,l]>0,1:2]
-              trps=as.matrix(trps,ncol=2)
+              trps<- X[[l]][which(y[i,,l]>0),1:2]
+              trps=matrix(trps,ncol=2,nrow=1)
               if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
               }else{
@@ -441,7 +442,7 @@ SCRmcmcOpensex <-
           idx=which(rowSums(y[,,l])>0) #switch for those actually caught
           for(i in 1:M){
             if(i%in%idx){
-              trps<- X[[l]][y[i,,l]>0,1:2]
+              trps<- X[[l]][which(y[i,,l]>0),1:2]
               trps=as.matrix(trps,ncol=2)
               if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
@@ -468,7 +469,7 @@ SCRmcmcOpensex <-
           trps=matrix(0,nrow=0,ncol=2)
           for(l in 1:t){ #loop over t to get all cap locs
             if(primary[l]==1){
-              trps<- rbind(trps,X[[l]][y[i,,l]>0,1:2])
+              trps<- rbind(trps,X[[l]][which(y[i,,l]>0),1:2])
             }
           }
           trps=as.matrix(trps,ncol=2)
@@ -498,7 +499,7 @@ SCRmcmcOpensex <-
             idx=which(rowSums(y[,,l])>0)
             for(i in 1:M){
               if(i%in%idx){
-                trps<- X[[l]][y[i,,l]>0,1:2]
+                trps<- X[[l]][which(y[i,,l]>0),1:2]
                 trps=matrix(trps,ncol=2)
                 if(nrow(trps)>1){
                   dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
@@ -995,6 +996,8 @@ SCRmcmcOpensex <-
             ll.z.cand[i,l] <- dbinom(zt.cand[i], 1, Ez[i,l-1], log=TRUE)
             prior.z=ll.z[i,l]
             prior.z.cand=ll.z.cand[i,l]
+            fix1=zt.cand[i]==1&sum(z[i,])==0 #guys never in pop proposed to be turned on
+            fix2=sum(z[i,])==1&zt.cand[i]==0&z[i,l]==1 #guys in pop only once and proposed to be turned off
             if((t>3)&(l<t)){
               a.cand <- a
               a.cand[,l]=at.cand
@@ -1480,7 +1483,7 @@ SCRmcmcOpensex <-
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))){
                 s2[i,l, ] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,, l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1537,7 +1540,7 @@ SCRmcmcOpensex <-
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1635,7 +1638,7 @@ SCRmcmcOpensex <-
               }
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1750,7 +1753,7 @@ SCRmcmcOpensex <-
               }
               if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                 s2[i,l, ] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,, l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1799,7 +1802,7 @@ SCRmcmcOpensex <-
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
@@ -1898,7 +1901,7 @@ SCRmcmcOpensex <-
               # if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
-                D[i,,l] <- dtmp
+                D[i,1:nrow(X[[l]]),l] <- dtmp
                 lamd[i,,l] <- lamd.cand[i,,l]
                 if(obstype=="bernoulli"){
                   pd[i,,l]=pd.cand[i,,l]
