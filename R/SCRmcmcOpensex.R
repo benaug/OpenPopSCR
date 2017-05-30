@@ -402,7 +402,9 @@ SCRmcmcOpensex <-
           for(i in 1:M){
             if(i%in%idx){
               trps<- X[[l]][which(y[i,,l]>0),1:2]
-              trps=matrix(trps,ncol=2,nrow=1)
+              if(!is.matrix(trps)){
+                trps=matrix(trps,ncol=2,nrow=1)
+              }
               if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
               }else{
@@ -443,7 +445,9 @@ SCRmcmcOpensex <-
           for(i in 1:M){
             if(i%in%idx){
               trps<- X[[l]][which(y[i,,l]>0),1:2]
-              trps=as.matrix(trps,ncol=2)
+              if(!is.matrix(trps)){
+                trps=matrix(trps,ncol=2,nrow=1)
+              }
               if(nrow(trps)>1){
                 s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
               }else{
@@ -472,7 +476,9 @@ SCRmcmcOpensex <-
               trps<- rbind(trps,X[[l]][which(y[i,,l]>0),1:2])
             }
           }
-          trps=as.matrix(trps,ncol=2)
+          if(!is.matrix(trps)){
+            trps=matrix(trps,ncol=2,nrow=1)
+          }
           if(nrow(trps)>1){
             dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
           }else{
@@ -500,7 +506,9 @@ SCRmcmcOpensex <-
             for(i in 1:M){
               if(i%in%idx){
                 trps<- X[[l]][which(y[i,,l]>0),1:2]
-                trps=matrix(trps,ncol=2)
+                if(!is.matrix(trps)){
+                  trps=matrix(trps,ncol=2,nrow=1)
+                }
                 if(nrow(trps)>1){
                   dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
                 }else{
