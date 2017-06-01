@@ -4,10 +4,10 @@
 \alias{mcmc.OpenSCR.sex}
 \title{Run MCMC algorithm for sex-specific Open population SCR model.}
 \usage{
-mcmc.OpenSCR.sex(data, niter = 1000, nburn = 0, nthin = 1, K = NA,
-  M = NA, inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
+mcmc.OpenSCR.sex(data, niter = 1000, nburn = 0, nthin = 1, M = NA,
+  inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
   Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
-  primary = NA, dualACup = FALSE)
+  dualACup = FALSE)
 }
 \arguments{
 \item{data}{a list produced by simOpenSCR or in the same format}
@@ -56,13 +56,13 @@ restricted availabilities of dispersal distances.}
 If using the patch activity center update, number the patches and then add a column with a number for each
 dSS row indicating which patch the dSS element belongs to.}
 
-\item{primary}{a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
-population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.}
-
 \item{dualACup}{a logical to be used with discrete state spaces indicating whether a second, interpatch activity
 center proposal is used.  This prevents activity centers from being stuck inside patches that are too far apart for
 the typical continuous space activity center update to produce patch jumps.  This is still experimental, but I think it
 will be important for movement models on patchy state spaces.}
+
+\item{primary}{a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.}
 }
 \value{
 a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
