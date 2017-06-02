@@ -633,13 +633,13 @@ SCRmcmcOpensex <-
       pd=pd.cand=1-exp(-lamd)
       for(l in 1:t){
         if(primary[l]==1){
-          ll.y[,,l]= dbinom(y[,,l],tf[[l]],pd[,,l]*z[,l],log=TRUE)
+          ll.y[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd[,1:J[l],l]*z[,l],log=TRUE)
         }
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
         if(primary[l]==1){
-          ll.y[,,l]= dpois(y[,,l],tf[[l]]*lamd[,,l]*z[,l],log=TRUE)
+          ll.y[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd[,1:J[l],l]*z[,l],log=TRUE)
         }
       }
     }else{
@@ -1030,26 +1030,6 @@ SCRmcmcOpensex <-
                 prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l2+1])
               }
             }else{
-              #Calculate gamma.prime, Ez, and ll.z for l
-              # Ntmp=N
-              # Ntmp[l]=sum(zt.cand)
-              # if(l<t){ ## NOTE: Don't subset with swapz
-              #   reject=FALSE
-              #   for(l2 in l:(t-1)){
-              #     gamma.primeM.cand[l2]=(Ntmp[l2]*gammaMuse[l2]) / sum(a.cand[sex==1,l2])
-              #     gamma.primeF.cand[l2]=(Ntmp[l2]*gammaFuse[l2]) / sum(a.cand[sex==2,l2])
-              #     if(gamma.primeM.cand[l2] > 1 | gamma.primeF.cand[l2] > 1){
-              #       reject=TRUE
-              #       warning("Rejected z due to low M")
-              #       next
-              #     }
-              #     Ez.cand[sex==1,l2]=z.cand[sex==1,l2]*phiMuse[l2] + a.cand[sex==1,l2]*gamma.primeM.cand[l2]
-              #     Ez.cand[sex==2,l2]=z.cand[sex==2,l2]*phiFuse[l2] + a.cand[sex==2,l2]*gamma.primeF.cand[l2]
-              #     ll.z.cand[,l2+1]=dbinom(z.cand[,l2+1], 1, Ez.cand[,l2], log=TRUE)
-              #     prior.z <- prior.z + sum(ll.z[,l2+1])
-              #     prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l2+1])
-              #   }
-              # }
               if(l<t){ ## NOTE: Don't subset with swapz
                 # gamma.prime.cand[l] <- sum(zt.cand)*gammause[l] / sum(at.cand)
                 gamma.primeM.cand[l]=(sum(zt.cand)*gammaMuse[l]) / sum(at.cand[sex==1])
@@ -1203,17 +1183,17 @@ SCRmcmcOpensex <-
         }else{
           sex.cand[i]=1
         }
-        if(length(lam0)==2&length(sigma)==2){
-          lamd.cand[i,,]=lam0[sex.cand[i]]*exp(-D[i,,]^2/(2*sigma[sex.cand[i]]*sigma[sex.cand[i]]))
-        }else if(length(lam0)==2&length(sigma)==1){
-          lamd.cand[i,,]=lam0[sex.cand[i]]*exp(-D[i,,]^2/(2*sigma*sigma))
-        }else if(length(lam0)==1&length(sigma)==2){
-          lamd.cand[i,,]=lam0*exp(-D[i,,]^2/(2*sigma[sex.cand[i]]*sigma[sex.cand[i]]))
-        }else{
-          lamd.cand[i,,]=lam0*exp(-D[i,,]^2/(2*sigma*sigma))
-        }
         for(l in 1:t){
           if(primary[l]==1){
+            if(length(lam0)==2&length(sigma)==2){
+              lamd.cand[i,1:J[l],l]=lam0[sex.cand[i]]*exp(-D[i,1:J[l],l]^2/(2*sigma[sex.cand[i]]*sigma[sex.cand[i]]))
+            }else if(length(lam0)==2&length(sigma)==1){
+              lamd.cand[i,1:J[l],l]=lam0[sex.cand[i]]*exp(-D[i,1:J[l],l]^2/(2*sigma*sigma))
+            }else if(length(lam0)==1&length(sigma)==2){
+              lamd.cand[i,1:J[l],l]=lam0*exp(-D[i,1:J[l],l]^2/(2*sigma[sex.cand[i]]*sigma[sex.cand[i]]))
+            }else{
+              lamd.cand[i,1:J[l],l]=lam0*exp(-D[i,1:J[l],l]^2/(2*sigma*sigma))
+            }
             if(obstype=="bernoulli"){
               pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
               ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
@@ -1452,9 +1432,9 @@ SCRmcmcOpensex <-
                   D[i,1:J[l],l] <- dtmp[1:J[l],l]
                   lamd[i,1:J[l], l] <- lamd.cand[i,1:J[l],l]
                   if(obstype=="bernoulli"){
-                    pd[i,1:J[l],]=pd.cand[i,1:J[l],]
+                    pd[i,1:J[l],l]=pd.cand[i,1:J[l],l]
                   }
-                  ll.y[i,1:J[l],]=ll.y.cand[i,1:J[l],]
+                  ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
                 }
               }
               if(usedSS){
