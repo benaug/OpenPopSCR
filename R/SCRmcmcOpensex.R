@@ -874,26 +874,30 @@ SCRmcmcOpensex <-
             #Make object to put N1_prop in to but use current values of the other Ns
             Ntmp=N
             Ntmp[1]=sum(z.cand[,1])
+            reject=FALSE
             for(l in 2:t){
               gamma.primeM.cand[l-1]=(Ntmp[l-1]*gammaMuse[l-1]) / sum(a.cand[sex==1,l-1])
               gamma.primeF.cand[l-1]=(Ntmp[l-1]*gammaFuse[l-1]) / sum(a.cand[sex==2,l-1])
               if(gamma.primeM.cand[l-1] > 1 | gamma.primeF.cand[l-1] > 1) { # E(Recruits) must be < nAvailable
                 warning("Rejected z due to low M")
+                reject=TRUE
                 next
               }
               Ez.cand[sex==1,l-1]=z.cand[sex==1,l-1]*phiMuse[l-1] + a.cand[sex==1,l-1]*gamma.primeM.cand[l-1]
               Ez.cand[sex==2,l-1]=z.cand[sex==2,l-1]*phiFuse[l-1] + a.cand[sex==2,l-1]*gamma.primeF.cand[l-1]
               ll.z.cand[,l]=dbinom(z.cand[,l], 1, Ez.cand[,l-1], log=TRUE)
             }
-            if(runif(1) < exp((sum(ll.y.cand[i,,1])+ll.z.cand[i,1]+sum(ll.z.cand[,2:t]))-(sum(ll.y[i,,1])+ll.z[i,1]+sum(ll.z[,2:t])) )) {
-              ll.y[i,1:J[1],1] = ll.y.cand[i,1:J[1],1]
-              ll.z[i,1]=ll.z.cand[i,1]
-              ll.z[,2:t] = ll.z.cand[,2:t]
-              Ez = Ez.cand
-              gamma.primeM = gamma.primeM.cand
-              gamma.primeF = gamma.primeF.cand
-              z[i,1] = z.cand[i,1]
-              a=a.cand
+            if(reject==FALSE){
+              if(runif(1) < exp((sum(ll.y.cand[i,1:J[1],1])+ll.z.cand[i,1]+sum(ll.z.cand[,2:t]))-(sum(ll.y[i,1:J[1],1])+ll.z[i,1]+sum(ll.z[,2:t])) )) {
+                ll.y[i,1:J[1],1] = ll.y.cand[i,1:J[1],1]
+                ll.z[i,1]=ll.z.cand[i,1]
+                ll.z[,2:t] = ll.z.cand[,2:t]
+                Ez = Ez.cand
+                gamma.primeM = gamma.primeM.cand
+                gamma.primeF = gamma.primeF.cand
+                z[i,1] = z.cand[i,1]
+                a=a.cand
+              }
             }
           }else{#Don't need to modify more than one year
             z1.cand <- z[,1]
@@ -902,38 +906,26 @@ SCRmcmcOpensex <-
             a1.cand[i] <- 1-z1.cand[i]
             gamma.primeM.cand[1] <- sum(z1.cand)*gammaMuse[1] / sum(a1.cand[sex==1])
             gamma.primeF.cand[1] <- sum(z1.cand)*gammaFuse[1] / sum(a1.cand[sex==2])
+            reject=FALSE
             if(gamma.primeM.cand[1] > 1| gamma.primeF.cand[1] > 1) { # E(Recruits) must be < nAvailable
               warning("Rejected z due to low M")
-              next
+              reject=TRUE
             }
             ll.z.cand[i,1] <- dbinom(z1.cand[i], 1, psi, log=TRUE)
-            #Adding this due to sex
-            a.cand=a
-            a.cand[,1]=a1.cand
-            z.cand=z
-            z.cand[,1]=z1.cand
-            Ntmp=N
-            Ntmp[1]=sum(z.cand[,1])
-            for(l in 2:t){
-              gamma.primeM.cand[l-1]=(Ntmp[l-1]*gammaMuse[l-1]) / sum(a.cand[sex==1,l-1])
-              gamma.primeF.cand[l-1]=(Ntmp[l-1]*gammaFuse[l-1]) / sum(a.cand[sex==2,l-1])
-              if(gamma.primeM.cand[l-1] > 1 | gamma.primeF.cand[l-1] > 1) { # E(Recruits) must be < nAvailable
-                warning("Rejected z due to low M")
-                next
+            Ez.cand[sex==1,1]=z1.cand[sex==1]*phiMuse[1] + a1.cand[sex==1]*gamma.primeM.cand[1]
+            Ez.cand[sex==2,1]=z1.cand[sex==2]*phiFuse[1] + a1.cand[sex==2]*gamma.primeF.cand[1]
+            ll.z.cand[,2] <- dbinom(z[,2], 1, Ez.cand[,1], log=TRUE)
+            if(reject==FALSE){
+              if(runif(1) < exp((sum(ll.y.cand[i,1:J[1],1])+ll.z.cand[i,1]+sum(ll.z.cand[,2:t]))-(sum(ll.y[i,1:J[1],1])+ll.z[i,1]+sum(ll.z[,2:t])) )) {
+                ll.y[i,1:J[1],1] = ll.y.cand[i,1:J[1],1]
+                ll.z[i,1]=ll.z.cand[i,1]
+                ll.z[,2] = ll.z.cand[,2]
+                Ez[,1] = Ez.cand[,1]
+                gamma.primeM[1]= gamma.primeM.cand[1]
+                gamma.primeF[1]= gamma.primeF.cand[1]
+                z[i,1] = z1.cand[i]
+                a[i,1]=a1.cand[i]
               }
-              Ez.cand[sex==1,l-1]=z.cand[sex==1,l-1]*phiMuse[l-1] + a.cand[sex==1,l-1]*gamma.primeM.cand[l-1]
-              Ez.cand[sex==2,l-1]=z.cand[sex==2,l-1]*phiFuse[l-1] + a.cand[sex==2,l-1]*gamma.primeF.cand[l-1]
-              ll.z.cand[,l]=dbinom(z.cand[,l], 1, Ez.cand[,l-1], log=TRUE)
-            }
-            if(runif(1) < exp((sum(ll.y.cand[i,1:J[1],1])+ll.z.cand[i,1]+sum(ll.z.cand[,2:t]))-(sum(ll.y[i,1:J[1],1])+ll.z[i,1]+sum(ll.z[,2:t])) )) {
-              ll.y[i,1:J[1],1] = ll.y.cand[i,1:J[1],1]
-              ll.z[i,1]=ll.z.cand[i,1]
-              ll.z[,2:t] = ll.z.cand[,2:t]
-              Ez = Ez.cand
-              gamma.primeM= gamma.primeM.cand
-              gamma.primeF= gamma.primeF.cand
-              z[i,1] = z1.cand[i]
-              a[i,1]=a1.cand[i]
             }
           }
         }
@@ -1008,7 +1000,7 @@ SCRmcmcOpensex <-
             prior.z.cand=ll.z.cand[i,l]
             fix1=zt.cand[i]==1&sum(z[i,])==0 #guys never in pop proposed to be turned on
             fix2=sum(z[i,])==1&zt.cand[i]==0&z[i,l]==1 #guys in pop only once and proposed to be turned off
-            if((t>3)&(l<t)){
+            if((t>3)&(l<t)&(fix1|fix2)){
               a.cand <- a
               a.cand[,l]=at.cand
               z.cand=z
@@ -1028,6 +1020,8 @@ SCRmcmcOpensex <-
                 gamma.primeF.cand[l2]=(Ntmp[l2]*gammaFuse[l2]) / sum(a.cand[sex==2,l2])
                 if(gamma.primeM.cand[l2] > 1 | gamma.primeF.cand[l2] > 1){
                   reject=TRUE
+                  warning("Rejected z due to low M")
+                  next
                 }
                 Ez.cand[sex==1,l2]=z.cand[sex==1,l2]*phiMuse[l2] + a.cand[sex==1,l2]*gamma.primeM.cand[l2]
                 Ez.cand[sex==2,l2]=z.cand[sex==2,l2]*phiFuse[l2] + a.cand[sex==2,l2]*gamma.primeF.cand[l2]
@@ -1035,54 +1029,69 @@ SCRmcmcOpensex <-
                 prior.z <- prior.z + sum(ll.z[,l2+1])
                 prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l2+1])
               }
-              if(reject){
-                warning("Rejected z due to low M")
-                next
-              }
             }else{
               #Calculate gamma.prime, Ez, and ll.z for l
-              Ntmp=N
-              Ntmp[l]=sum(zt.cand)
+              # Ntmp=N
+              # Ntmp[l]=sum(zt.cand)
+              # if(l<t){ ## NOTE: Don't subset with swapz
+              #   reject=FALSE
+              #   for(l2 in l:(t-1)){
+              #     gamma.primeM.cand[l2]=(Ntmp[l2]*gammaMuse[l2]) / sum(a.cand[sex==1,l2])
+              #     gamma.primeF.cand[l2]=(Ntmp[l2]*gammaFuse[l2]) / sum(a.cand[sex==2,l2])
+              #     if(gamma.primeM.cand[l2] > 1 | gamma.primeF.cand[l2] > 1){
+              #       reject=TRUE
+              #       warning("Rejected z due to low M")
+              #       next
+              #     }
+              #     Ez.cand[sex==1,l2]=z.cand[sex==1,l2]*phiMuse[l2] + a.cand[sex==1,l2]*gamma.primeM.cand[l2]
+              #     Ez.cand[sex==2,l2]=z.cand[sex==2,l2]*phiFuse[l2] + a.cand[sex==2,l2]*gamma.primeF.cand[l2]
+              #     ll.z.cand[,l2+1]=dbinom(z.cand[,l2+1], 1, Ez.cand[,l2], log=TRUE)
+              #     prior.z <- prior.z + sum(ll.z[,l2+1])
+              #     prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l2+1])
+              #   }
+              # }
               if(l<t){ ## NOTE: Don't subset with swapz
-                for(l2 in l:(t-1)){
-                  gamma.primeM.cand[l2]=(Ntmp[l2]*gammaMuse[l2]) / sum(a.cand[sex==1,l2])
-                  gamma.primeF.cand[l2]=(Ntmp[l2]*gammaFuse[l2]) / sum(a.cand[sex==2,l2])
-                  if(gamma.primeM.cand[l2] > 1 | gamma.primeF.cand[l2] > 1){
-                    reject=TRUE
-                  }
-                  Ez.cand[sex==1,l2]=z.cand[sex==1,l2]*phiMuse[l2] + a.cand[sex==1,l2]*gamma.primeM.cand[l2]
-                  Ez.cand[sex==2,l2]=z.cand[sex==2,l2]*phiFuse[l2] + a.cand[sex==2,l2]*gamma.primeF.cand[l2]
-                  ll.z.cand[,l2+1]=dbinom(z.cand[,l2+1], 1, Ez.cand[,l2], log=TRUE)
-                  prior.z <- prior.z + sum(ll.z[,l2+1])
-                  prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l2+1])
+                # gamma.prime.cand[l] <- sum(zt.cand)*gammause[l] / sum(at.cand)
+                gamma.primeM.cand[l]=(sum(zt.cand)*gammaMuse[l]) / sum(at.cand[sex==1])
+                gamma.primeF.cand[l]=(sum(zt.cand)*gammaFuse[l]) / sum(at.cand[sex==2])
+                if(gamma.primeM.cand[l] > 1 | gamma.primeF.cand[l] > 1){
+                  warning("Rejected z due to low M")
+                  next
                 }
+                # Ez.cand[,l] <- zt.cand*phiuse[l] + at.cand*gamma.prime.cand[l]
+                Ez.cand[sex==1,l]=zt.cand[sex==1]*phiMuse[l] + at.cand[sex==1]*gamma.primeM.cand[l]
+                Ez.cand[sex==2,l]=zt.cand[sex==2]*phiFuse[l] + at.cand[sex==2]*gamma.primeF.cand[l]
+                ll.z.cand[,l+1] <- dbinom(z[,l+1], 1, Ez.cand[,l], log=TRUE)
+                prior.z <- prior.z + sum(ll.z[,l+1])
+                prior.z.cand <- prior.z.cand + sum(ll.z.cand[,l+1])
               }
             }
-            #No ll.sex component for years >1
-            if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l]) + prior.z.cand) - (sum(ll.y[i,1:J[l],l]) +prior.z) )) {
-              if(primary[l]==1){
-                ll.y[i,1:J[l],l] <- ll.y.cand[i,1:J[l],l]
+            if(reject==FALSE){
+              if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l]) + prior.z.cand) - (sum(ll.y[i,1:J[l],l]) +prior.z) )) {
+                if(primary[l]==1){
+                  ll.y[i,1:J[l],l] <- ll.y.cand[i,1:J[l],l]
+                }
+                ll.z[i,l] <- ll.z.cand[i,l]
+                if((fix1|fix2)&(t>3)&(l<t)){
+                  z=z.cand
+                  a=a.cand
+                  ll.z[,l:t]=ll.z.cand[,l:t]
+                  Ez[,l:(t-1)]=Ez.cand[,l:(t-1)]
+                  gamma.primeM= gamma.primeM.cand
+                  gamma.primeF= gamma.primeF.cand
+                }else{
+                  z[,l] <- zt.cand
+                  a[,l] <- at.cand
+                  if(l < t) {
+                    gamma.primeM <- gamma.primeM.cand
+                    gamma.primeF <- gamma.primeF.cand
+                    ll.z[,l+1] <- ll.z.cand[,l+1]
+                    Ez[,l] <- Ez.cand[,l]
+                  }
+                }
+                N[l] <- sum(z[,l])
               }
-              ll.z[i,l] <- ll.z.cand[i,l]
-              if((t>3)&(l<t)){
-                z=z.cand
-                a=a.cand
-                ll.z[,l:t]=ll.z.cand[,l:t]
-                Ez[,l:(t-1)]=Ez.cand[,l:(t-1)]
-                gamma.primeM= gamma.primeM.cand
-                gamma.primeF= gamma.primeF.cand
-              }else{
-                z[,l] <- zt.cand
-                a[,l] <- at.cand
-                if(l < t) {
-                  gamma.primeM <- gamma.primeM.cand
-                  gamma.primeF <- gamma.primeF.cand
-                  ll.z[,l+1] <- ll.z.cand[,l+1]
-                  Ez[,l] <- Ez.cand[,l]
-              }
-              N[l] <- sum(z[,l])
             }
-          }
           }
         }
       }else{
