@@ -113,6 +113,9 @@ SCRmcmcOpen <-
       if(!"sigma_t"%in%names(proppars)){
         stop("must supply proppars$sigma_t if ACtype is metamu or markov")
       }
+      if(!"s1x"%in%names(proppars)|!"s1y"%in%names(proppars)){
+        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu or markov")
+      }
       if(is.null(sigma_t)){
         stop("must supply inits$sigma_t if ACtype is metamu or markov")
       }
@@ -1143,6 +1146,7 @@ SCRmcmcOpen <-
               }else{
                 ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
               }
+              ll.s2.cand[i,]=ll.s2[i,]
               if(l==1){#only ll.s2[i,1] matters
                 #time 1 to 2
                 ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t,log=TRUE)

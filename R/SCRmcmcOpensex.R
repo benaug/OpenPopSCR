@@ -137,7 +137,7 @@ SCRmcmcOpensex <-
     if(!ACtype%in%c("fixed","independent","metamu","metamu2","markov","markov2")){
       stop("ACtype must be 'fixed','independent','metamu', 'metamu2','markov', or 'markov2'")
     }
-    if(ACtype%in%c("metamu","markov","metamu2")){
+    if(ACtype%in%c("metamu","markov","metamu2","markov2")){
       if(!"sigma_t"%in%names(proppars)){
         stop("must supply proppars$sigma_t if ACtype is metamu or markov")
       }
@@ -145,6 +145,12 @@ SCRmcmcOpensex <-
         stop("must supply inits$sigma_t if ACtype is metamu or markov")
       }
     }
+    if(ACtype%in%c("metamu","markov")){
+      if(!"s1x"%in%names(proppars)|!"s1y"%in%names(proppars)){
+        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu or markov")
+      }
+    }
+
     if(is.null(proppars$sex)){
       stop("must enter a proppar for sex update")
     }
@@ -194,6 +200,10 @@ SCRmcmcOpensex <-
       for(l in 2:(t-1)){#Turn on zeros with 1's on either side
         known.matrix[known.matrix[,l]==0&known.matrix[,l-1]==1&rowSums(matrix(known.matrix[,(l+1):t],nrow=M))>0,l]=1
       }
+    }
+    if(sum(known.sex==0)<proppars$sex){
+      warning("Fewer unknown sexes than number to update in proppars$sex. Updating all unknown sexes.")
+      proppars$sex=sum(known.sex==0)
     }
     z=known.matrix
     # r=array(0,dim=dim(z))
@@ -394,9 +404,6 @@ SCRmcmcOpensex <-
       }
       #initialize s2
       s2=array(NA,dim=c(M,t,2))
-      for(l in 1:t){
-        s2[,l,]=s1
-      }
       if(ACtype%in%c("metamu","metamu2","markov")){
         #update s2s for guys captured each year and add noise for uncaptured guys. More consistent with sigma_t>0
         for(l in 1:t){
@@ -422,10 +429,29 @@ SCRmcmcOpensex <-
               }
 
             }else{
-              inside=FALSE
-              while(inside==FALSE){
-                s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t[sex[i]]),rnorm(1,s1[i,2],sigma_t[sex[i]]))
-                inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+              if(ACtype%in%c("metamu","metamu2")){#this doesn't work well for markov with larger sigma
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t[sex[i]]),rnorm(1,s1[i,2],sigma_t[sex[i]]))
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
+              }
+            }
+          }
+        }
+        if(ACtype=="markov"){#smarter starting values for markov mvmt
+          for(i in 1:M){
+            if(is.na(s2[i,1,1])){
+              s2[i,1,]=s1[i,]
+            }
+            for(l in 2:t){
+              if(is.na(s2[i,l,1])){
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,1]=rnorm(1,s2[i,l-1,1],sigma_t[sex[i]])
+                  s2[i,l,2]=rnorm(1,s2[i,l-1,2],sigma_t[sex[i]])
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
               }
             }
           }
@@ -443,6 +469,7 @@ SCRmcmcOpensex <-
         }
       }else if(ACtype=="independent"){
         for(l in 1:t){
+          s2[,l,]=s1
           idx=which(rowSums(y[,,l])>0) #switch for those actually caught
           for(i in 1:M){
             if(i%in%idx){
@@ -463,6 +490,10 @@ SCRmcmcOpensex <-
               }
             }
           }
+        }
+      }else{#fixed
+        for(l in 1:t){
+          s2[,l,]=s1
         }
       }
     }else{#use dSS
@@ -1201,7 +1232,7 @@ SCRmcmcOpensex <-
               ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
             }
           }else{#might cause a problem later so fix now
-            lamd.cand[i,1:J[l],l]=0
+            lamd.cand[i,,l]=0
           }
         }
         #ll.z. changing 1 sex changed gamma.primeM and gamma.primeF all the way through to ll.z for *everyone*
@@ -1479,7 +1510,7 @@ SCRmcmcOpensex <-
                   ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                 }
               }
-              if(runif(1) < exp(sum(ll.y.cand[i,1:J[l],l]) -sum(ll.y[i,1:J[l],l]))){
+              if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))){
                 s2[i,l, ] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
@@ -1538,7 +1569,7 @@ SCRmcmcOpensex <-
                 }
               }
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
-              if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+ll.s2.cand[i,l]) -(sum(ll.y[i,1:J[l],l])+ll.s2[i,l]))){
+              if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))){
                 s2[i,l,] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
@@ -1591,6 +1622,7 @@ SCRmcmcOpensex <-
                   ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                 }
               }
+              ll.s2.cand[i,]=ll.s2[i,]
               if(ACtype=="markov"){
                 if(l==1){#only ll.s2[i,1] matters
                   #time 1 to 2
@@ -1638,7 +1670,7 @@ SCRmcmcOpensex <-
                   ll.s2.cand[i,t-1]=dmultinom(pick,1,probs,log=TRUE)
                 }
               }
-              if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,1:J[l],l])+sum(ll.s2[i,])))){
+              if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
@@ -1759,7 +1791,7 @@ SCRmcmcOpensex <-
                   ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                 }
               }
-              if(runif(1) < exp(sum(ll.y.cand[i,1:J[l],l]) -sum(ll.y[i,1:J[l],l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
+              if(runif(1) < exp(sum(ll.y.cand[i,,l]) -sum(ll.y[i,,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                 s2[i,l, ] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
@@ -1810,7 +1842,7 @@ SCRmcmcOpensex <-
                 }
               }
               ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
-              if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+ll.s2.cand[i,l]) -(sum(ll.y[i,1:J[l],l])+ll.s2[i,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
+              if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                 s2[i,l,] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
@@ -1863,6 +1895,7 @@ SCRmcmcOpensex <-
                   ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                 }
               }
+              ll.s2.cand[i,]=ll.s2[i,]
               if(ACtype=="markov"){
                 if(l==1){#only ll.s2[i,1] matters
                   #time 1 to 2
@@ -1911,7 +1944,7 @@ SCRmcmcOpensex <-
                 }
               }
               # if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
-              if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,1:J[l],l])+sum(ll.s2[i,])))){
+              if(runif(1) < exp((sum(ll.y.cand[i,,l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,,l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp
