@@ -118,10 +118,10 @@
 
 mcmc.OpenSCR.sex <-
   function(data,niter=1000,nburn=0, nthin=1,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,
-           Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
+           Rcpp=FALSE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      stop("Rcpp currently disabled for this sampler.  It needs to be updated.")
-      out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS)
+      # stop("Rcpp currently disabled for this sampler.  It needs to be updated.")
+      out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
     }else{#Don't use Rcpp
       out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
     }

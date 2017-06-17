@@ -231,7 +231,7 @@ SCRmcmcOpenRcpp <-
     for(i in idx){
       trps=matrix(0,nrow=0,ncol=2)
       for(j in 1:t){ #loop over t to get all cap locs
-        trps<- rbind(trps,X[[j]][y[i,,j]>0,1:2])
+        trps<- rbind(trps,X[[j]][which(y[i,,j]>0),1:2])
       }
       s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
     }
@@ -287,7 +287,7 @@ SCRmcmcOpenRcpp <-
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][which(which(y[i,,l]>0)>0),1:2]
+            trps<- X[[l]][which(y[i,,l]>0),1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
@@ -315,15 +315,13 @@ SCRmcmcOpenRcpp <-
       }
     }
     if(ACtype=="independent"){
-      proppars$s1x=proppars$s1y=0.1 #dummy for Rcpp
-      proppars$sigma_t=0.1
       #update s2s for guys captured each year and put uncaptured guys OFF the GRID so they can get turned on.
       #general not as good alternative, make sure they're not within buff/2 of a trap
       for(l in 1:t){
         idx=which(rowSums(y[,,l])>0) #switch for those actually caught
         for(i in 1:M){
           if(i%in%idx){
-            trps<- X[[l]][which(y[i,,l]>0)>0,1:2]
+            trps<- X[[l]][which(y[i,,l]>0),1:2]
             if(is.matrix(trps)){
               s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
             }else{
@@ -341,10 +339,6 @@ SCRmcmcOpenRcpp <-
           }
         }
       }
-    }
-    if(ACtype=="fixed"){
-      proppars$s1x=proppars$s1y=0.1 #dummy for Rcpp
-      proppars$sigma_t=0.1
     }
     if(usedSS){
       #snap everyone back to closest place in state space
