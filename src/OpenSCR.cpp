@@ -78,7 +78,8 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,NumericMatrix dSS,bool usedSS) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,
+               NumericMatrix dSS,bool usedSS,LogicalVector primary) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -229,16 +230,42 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   //ll.s2
   NumericMatrix ll_s2(M,t);
   NumericMatrix ll_s2_cand(M,t);
-  if((ACtype==2)|(ACtype==5)){
+  if(ACtype==2){
+    for(int l=0; l<t; l++){
+      for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
+        if(useverts){
+          ll_s2(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+        }else{//truncate
+          ll_s2(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t(0),FALSE)/
+            (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+            R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+          ll_s2(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t(0),FALSE)/
+            (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+              R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+        }
+        ll_s2_cand(i,l)=ll_s2(i,l);
+      }
+    }
+  }else if(ACtype==5){
     for(int l=0; l<t; l++){
       for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
         ll_s2(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+        ll_s2_cand(i,l)=ll_s2(i,l);
       }
     }
   }else if(ACtype==3){
     for(int l=1; l<t; l++){
       for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
-        ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+        if(useverts){
+          ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+        }else{
+          ll_s2(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t(0),FALSE)/
+            (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+              R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+          ll_s2(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t(0),FALSE)/
+            (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+              R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+        }
         ll_s2_cand(i,l-1)=ll_s2(i,l-1);
       }
     }
@@ -246,30 +273,34 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   //  Detection function
   if(obstype==1){
     for(int l=0; l<t; l++){
-      likcurr2D(l)=0;
-      for(int i=0; i<M; i++) {
-        for(int j=0; j<Xidx(l); j++){
-          pd(i,j,l)=1-exp(-lamd(i,j,l));
-          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
-          if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-            likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+      if(primary(l)){
+        likcurr2D(l)=0;
+        for(int i=0; i<M; i++) {
+          for(int j=0; j<Xidx(l); j++){
+            pd(i,j,l)=1-exp(-lamd(i,j,l));
+            ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
+            if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+              likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+            }
           }
         }
+        llysum+=likcurr2D(l); //full likelihood sum
       }
-      llysum+=likcurr2D(l); //full likelihood sum
     }
   }else{
     for(int l=0; l<t; l++){
-      likcurr2D(l)=0;
-      for(int i=0; i<M; i++) {
-        for(int j=0; j<Xidx(l); j++){
-          ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
-          if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-            likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+      if(primary(l)){
+        likcurr2D(l)=0;
+        for(int i=0; i<M; i++) {
+          for(int j=0; j<Xidx(l); j++){
+            ll_y_curr(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
+            if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+              likcurr2D(l)+=ll_y_curr(i,j,l); //year-specific components
+            }
           }
         }
+        llysum+=likcurr2D(l); //full likelihood sum
       }
-      llysum+=likcurr2D(l); //full likelihood sum
     }
   }
   //ll.z. Some Ez are so small we're close to log(0) which is NaN in Rcpp
@@ -294,15 +325,17 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     // Need to resum the ll_y on each iter
     llysum=0;
     for(int l=0; l<t; l++){
-      likcurr2D(l)=0;
-      for(int i=0; i<M; i++) {
-        for(int j=0; j<Xidx(l); j++){
-          if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-            likcurr2D(l)+=ll_y_curr(i,j,l);
+      if(primary(l)){
+        likcurr2D(l)=0;
+        for(int i=0; i<M; i++) {
+          for(int j=0; j<Xidx(l); j++){
+            if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+              likcurr2D(l)+=ll_y_curr(i,j,l);
+            }
           }
         }
+        llysum+=likcurr2D(l); //full likelihood sum
       }
-      llysum+=likcurr2D(l); //full likelihood sum
     }
     //Update lam0
     if(lam0.size()==1){//fixed lambda
@@ -312,37 +345,41 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         lam0cand(0)=rand(0);
         //  Update lamd and calculate cand likelihood
         for(int l=0; l<t; l++){
-          likcand2D(l)=0;
-          for(int i=0; i<M; i++) {
-            for(int j=0; j<Xidx(l); j++){
-              lamdcand(i,j,l)=lam0cand(0)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                likcand2D(l)+=ll_y_cand(i,j,l);
+          if(primary(l)){
+            likcand2D(l)=0;
+            for(int i=0; i<M; i++) {
+              for(int j=0; j<Xidx(l); j++){
+                lamdcand(i,j,l)=lam0cand(0)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  likcand2D(l)+=ll_y_cand(i,j,l);
+                }
               }
             }
+            llycandsum+=likcand2D(l);
           }
-          llycandsum+=likcand2D(l);
         }
         rand2=Rcpp::runif(1);
         if(rand2(0)<exp(llycandsum-llysum)){
           lam0(0)=lam0cand(0);
           for(int l=0; l<t; l++){
-            for(int i=0; i<M; i++) {
-              for(int j=0; j<Xidx(l); j++){
-                lamd(i,j,l)=lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l)=pdcand(i,j,l);
+            if(primary(l)){
+              for(int i=0; i<M; i++) {
+                for(int j=0; j<Xidx(l); j++){
+                  lamd(i,j,l)=lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l)=pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
               }
+              likcurr2D(l)=likcand2D(l);
             }
-            likcurr2D(l)=likcand2D(l);
           }
           llysum=llycandsum;
         }
@@ -350,41 +387,43 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }else{//year-specific lambdas
       llysum=0;
       for(int l=0; l<t; l++){
-        likcand2D(l)=0;
-        rand=Rcpp::rnorm(1,lam0(l),proplam0(l));
-        if(rand(0) > 0){
-          lam0cand(l)=rand(0);
-          //  Calculate likelihood
-          for(int i=0; i<M; i++) {
-            for(int j=0; j<Xidx(l); j++){
-              lamdcand(i,j,l)=lam0cand(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                likcand2D(l)+=ll_y_cand(i,j,l);
-              }
-            }
-          }
-          rand2=Rcpp::runif(1);
-          if(rand2(0)<exp(likcand2D(l)-likcurr2D(l))){
-            lam0(l)=lam0cand(l);
+        if(primary(l)){
+          likcand2D(l)=0;
+          rand=Rcpp::rnorm(1,lam0(l),proplam0(l));
+          if(rand(0) > 0){
+            lam0cand(l)=rand(0);
+            //  Calculate likelihood
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
-                ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                lamdcand(i,j,l)=lam0cand(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmause(l)*sigmause(l)));
                 if(obstype==1){
-                  pd(i,j,l)=pdcand(i,j,l);
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
                 }
-                lamd(i,j,l)=lamdcand(i,j,l);
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  likcand2D(l)+=ll_y_cand(i,j,l);
+                }
               }
             }
-            likcurr2D(l)=likcand2D(l);
+            rand2=Rcpp::runif(1);
+            if(rand2(0)<exp(likcand2D(l)-likcurr2D(l))){
+              lam0(l)=lam0cand(l);
+              for(int i=0; i<M; i++) {
+                for(int j=0; j<Xidx(l); j++){
+                  ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l)=pdcand(i,j,l);
+                  }
+                  lamd(i,j,l)=lamdcand(i,j,l);
+                }
+              }
+              likcurr2D(l)=likcand2D(l);
+            }
           }
+          llysum+=likcurr2D(l);
         }
-        llysum+=likcurr2D(l);
       }
     }
     //fill lam0use
@@ -403,37 +442,41 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         llycandsum=0;
         //  Update lamd and calculate cand likelihood
         for(int l=0; l<t; l++){
-          likcand2D(l)=0;
-          for(int i=0; i<M; i++) {
-            for(int j=0; j<Xidx(l); j++){
-              lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(0)*sigmacand(0)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                likcand2D(l)+=ll_y_cand(i,j,l);
+          if(primary(l)){
+            likcand2D(l)=0;
+            for(int i=0; i<M; i++) {
+              for(int j=0; j<Xidx(l); j++){
+                lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(0)*sigmacand(0)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  likcand2D(l)+=ll_y_cand(i,j,l);
+                }
               }
             }
+            llycandsum+=likcand2D(l);
           }
-          llycandsum+=likcand2D(l);
         }
         rand=Rcpp::runif(1);
         if(rand(0)<exp(llycandsum-llysum)){
           sigma(0)=sigmacand(0);
           for(int l=0; l<t; l++){
-            for(int i=0; i<M; i++) {
-              for(int j=0; j<Xidx(l); j++){
-                lamd(i,j,l)=lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l)=pdcand(i,j,l);
+            if(primary(l)){
+              for(int i=0; i<M; i++) {
+                for(int j=0; j<Xidx(l); j++){
+                  lamd(i,j,l)=lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l)=pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
               }
+              likcurr2D(l)=likcand2D(l);
             }
-            likcurr2D(l)=likcand2D(l);
           }
           llysum=llycandsum;
         }
@@ -441,42 +484,44 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }else{//year-specific sigmas
       llysum=0;
       for(int l=0; l<t; l++){
-        rand=Rcpp::rnorm(1,sigma(l),propsig(l));
-        likcand2D(l)=0;
-        if(rand(0) > 0){
-          sigmacand(l)=rand(0);
-          //  Calculate likelihood
-          for(int i=0; i<M; i++) {
-            for(int j=0; j<Xidx(l); j++){
-              lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(l)*sigmacand(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                likcand2D(l)+=ll_y_cand(i,j,l);
-              }
-            }
-          }
-          rand2=Rcpp::runif(1);
-          if(rand2(0)<exp(likcand2D(l)-likcurr2D(l))){
-            sigma(l)=sigmacand(l);
-            likcurr2D(l)=likcand2D(l);
+        if(primary(l)){
+          rand=Rcpp::rnorm(1,sigma(l),propsig(l));
+          likcand2D(l)=0;
+          if(rand(0) > 0){
+            sigmacand(l)=rand(0);
+            //  Calculate likelihood
             for(int i=0; i<M; i++) {
               for(int j=0; j<Xidx(l); j++){
-                ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                lamdcand(i,j,l)=lam0use(l)*exp(-D(i,j,l)*D(i,j,l)/(2*sigmacand(l)*sigmacand(l)));
                 if(obstype==1){
-                  pd(i,j,l)=pdcand(i,j,l);
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+
                 }
-                lamd(i,j,l)=lamdcand(i,j,l);
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  likcand2D(l)+=ll_y_cand(i,j,l);
+                }
+              }
+            }
+            rand2=Rcpp::runif(1);
+            if(rand2(0)<exp(likcand2D(l)-likcurr2D(l))){
+              sigma(l)=sigmacand(l);
+              likcurr2D(l)=likcand2D(l);
+              for(int i=0; i<M; i++) {
+                for(int j=0; j<Xidx(l); j++){
+                  ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l)=pdcand(i,j,l);
+                  }
+                  lamd(i,j,l)=lamdcand(i,j,l);
+                }
               }
             }
           }
+          llysum+=likcurr2D(l);
         }
-        llysum+=likcurr2D(l);
       }
     }
     //fill sigmause
@@ -792,17 +837,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             //sum ll across j for each l and chosen i
             llycandsum=0;
             llysum=0;
-            for(int j=0; j<Xidx(l); j++){
-              if(obstype==1){
-                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(tf(j,l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
-              }else{
-                ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(tf(j,l)*lamd(swapz(i),j,l))-tf(j,l)*lamd(swapz(i),j,l));
-              }
-              if(ll_y_cand(swapz(i),j,l)==ll_y_cand(swapz(i),j,l)){
-                llycandsum+=ll_y_cand(swapz(i),j,l);
-              }
-              if(ll_y_curr(swapz(i),j,l)==ll_y_curr(swapz(i),j,l)){
-                llysum+=ll_y_curr(swapz(i),j,l);
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                if(obstype==1){
+                  ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(pd(swapz(i),j,l))+(tf(j,l)-y(swapz(i),j,l))*log(1-pd(swapz(i),j,l)));
+                }else{
+                  ll_y_cand(swapz(i),j,l)=zt_cand(swapz(i))*(y(swapz(i),j,l)*log(tf(j,l)*lamd(swapz(i),j,l))-tf(j,l)*lamd(swapz(i),j,l));
+                }
+                if(ll_y_cand(swapz(i),j,l)==ll_y_cand(swapz(i),j,l)){
+                  llycandsum+=ll_y_cand(swapz(i),j,l);
+                }
+                if(ll_y_curr(swapz(i),j,l)==ll_y_curr(swapz(i),j,l)){
+                  llysum+=ll_y_curr(swapz(i),j,l);
+                }
               }
             }
             //Add up the z likelihood contributions curr and cand for swapped guys
@@ -912,8 +959,10 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             }
             rand=Rcpp::runif(1);
             if(rand(0) < exp(( llycandsum+llzcandsum)-( llysum+llzsum) )) {
-              for(int j=0; j<Xidx(l); j++){
-                ll_y_curr(swapz(i),j,l) = ll_y_cand(swapz(i),j,l);
+              if(primary(l)){
+                for(int j=0; j<Xidx(l); j++){
+                  ll_y_curr(swapz(i),j,l) = ll_y_cand(swapz(i),j,l);
+                }
               }
               ll_z(swapz(i),l)=ll_z_cand(swapz(i),l);
               if(zt_cand(swapz(i))==1){//only changed z for this l
@@ -1078,17 +1127,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             llycandsum=0;
             llysum=0;
             for(int l=0; l<t; l++){
-              for(int j=0; j<Xidx(l); j++){
-                if(obstype==1){
-                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
-                }else{
-                  ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
-                }
-                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                  llycandsum+=ll_y_cand(i,j,l);
-                }
-                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                  llysum+=ll_y_curr(i,j,l);
+              if(primary(l)){
+                for(int j=0; j<Xidx(l); j++){
+                  if(obstype==1){
+                    ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(pd(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pd(i,j,l)));
+                  }else{
+                    ll_y_cand(i,j,l)=zcand(i,l)*(y(i,j,l)*log(tf(j,l)*lamd(i,j,l))-tf(j,l)*lamd(i,j,l));
+                  }
+                  if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                    llycandsum+=ll_y_cand(i,j,l);
+                  }
+                  if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                    llysum+=ll_y_curr(i,j,l);
+                  }
                 }
               }
             }
@@ -1100,8 +1151,10 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                 a(i,l)=aprop(l);
                 N(l)=Ntmp(l);
                 ll_z(i,0)=ll_z_cand(i,0);
-                for(int j=0; j<Xidx(l); j++){
-                  ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                if(primary(l)){
+                  for(int j=0; j<Xidx(l); j++){
+                    ll_y_curr(i,j,l)=ll_y_cand(i,j,l);
+                  }
                 }
               }
               for(int l=0; l<(t-1); l++){
@@ -1300,35 +1353,48 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             llycandsum=0;
             lls2sum=0;
             lls2candsum=0;
-            for(int j=0; j<Xidx(l); j++){
-              dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-              lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-              if(obstype==1){
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                llycandsum+=ll_y_cand(i,j,l);
-              }
-              if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                llysum+=ll_y_curr(i,j,l);
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                if(obstype==1){
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
               }
             }
-            ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+            if((ACtype==5)|((ACtype==2)&useverts)){
+              ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+            }else{//truncate
+              ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(0),FALSE)/
+                (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+                  R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+              ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(0),FALSE)/
+                (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+                  R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+            }
             rand=Rcpp::runif(1);
             if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))){
               s2(i,l,0)=ScandX(0);
               s2(i,l,1)=ScandY(0);
               ll_s2(i,l)=ll_s2_cand(i,l);
-              for(int j=0; j<Xidx(l); j++){
-                D(i,j,l) = dtmp(j,l);
-                lamd(i,j,l) = lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l) = pdcand(i,j,l);
+              if(primary(l)){
+                for(int j=0; j<Xidx(l); j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
           }
@@ -1339,23 +1405,22 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       for(int i=0; i<M; i++) {
         ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
         ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
-        if(usedSS){
-          double mindist=100000;
-          int idxdist=0;
-          for(int i2=0; i2<NdSS;i2++){
-            dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-            if(dists(i2)<mindist){
-              mindist=dists(i2);
-              idxdist=i2;
-            }
-          }
-          ScandX(0)=dSS(idxdist,0);
-          ScandY(0)=dSS(idxdist,1);
-        }
+        // if(usedSS){
+        //   double mindist=100000;
+        //   int idxdist=0;
+        //   for(int i2=0; i2<NdSS;i2++){
+        //     dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+        //     if(dists(i2)<mindist){
+        //       mindist=dists(i2);
+        //       idxdist=i2;
+        //     }
+        //   }
+        //   ScandX(0)=dSS(idxdist,0);
+        //   ScandY(0)=dSS(idxdist,1);
+        // }
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
-          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
           inbox(0)=FALSE;
           for(int p=0; p<polys; p++){
             inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
@@ -1368,7 +1433,16 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           lls2sum=0;
           lls2candsum=0;
           for(int l=0; l<t; l++) {
-            ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
+            if((ACtype==5)|((ACtype==2)&useverts)){
+              ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
+            }else{//truncate
+              ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),ScandX(0),sigma_t(0),FALSE)/
+                (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                  R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+              ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),ScandY(0),sigma_t(0),FALSE)/
+                (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                  R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+            }
             lls2sum+=ll_s2(i,l);
             lls2candsum+=ll_s2_cand(i,l);
           }
@@ -1389,7 +1463,16 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         lls2candsum=0;
         for(int i=0; i<M; i++) {
           for(int l=0; l<t; l++) {
-            ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+            if((ACtype==5)|((ACtype==2)&useverts)){
+              ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+            }else{
+              ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t_cand(0),FALSE)/
+                (R::pnorm(xlim(1),s1(i,0),sigma_t_cand(0),TRUE,FALSE)-
+                  R::pnorm(xlim(0),s1(i,0),sigma_t_cand(0),TRUE,FALSE)));
+              ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t_cand(0),FALSE)/
+                (R::pnorm(ylim(1),s1(i,1),sigma_t_cand(0),TRUE,FALSE)-
+                  R::pnorm(ylim(0),s1(i,1),sigma_t_cand(0),TRUE,FALSE)));
+            }
             lls2sum+=ll_s2(i,l);
             lls2candsum+=ll_s2_cand(i,l);
           }
@@ -1439,20 +1522,22 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           llysum=0;
           llycandsum=0;
           for(int l=0; l<t; l++){
-            for(int j=0; j<Xidx(l); j++){
-              dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-              lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                llycandsum+=ll_y_cand(i,j,l);
-              }
-              if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                llysum+=ll_y_curr(i,j,l);
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
               }
             }
           }
@@ -1463,13 +1548,15 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             for(int l=0; l<t; l++){
               s2(i,l,0)=ScandX(0);
               s2(i,l,1)=ScandY(0);
-              for(int j=0; j<J; j++){
-                D(i,j,l) = dtmp(j,l);
-                lamd(i,j,l) = lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l) = pdcand(i,j,l);
+              if(primary(l)){
+                for(int j=0; j<J; j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
           }
@@ -1510,41 +1597,78 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             //sum ll across j for each i and l
             llysum=0;
             llycandsum=0;
-            for(int j=0; j<Xidx(l); j++){
-              dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-              lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                llycandsum+=ll_y_cand(i,j,l);
-              }
-              if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                llysum+=ll_y_curr(i,j,l);
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
               }
             }
             lls2sum=0;
             lls2candsum=0;
             if(l==0){ //first occasion
               //step from 1 to 2
-              ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+              if(useverts){
+                ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+              }else{
+                ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
+                  (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
+                  (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+              }
               lls2sum+=ll_s2(i,0);
               lls2candsum+=ll_s2_cand(i,0);
             }else if((l>0)&(l<(t-1))){//middle occasions
+              if(useverts){
               //step from l-1 to l
               ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
               //step from l to l+1
               ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+              }else{
+                //step from l-1 to l
+                ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                  (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                  (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                //step from l to l+1
+                ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
+                  (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
+                  (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+              }
               lls2sum+=ll_s2(i,l-1);
               lls2sum+=ll_s2(i,l);
               lls2candsum+=ll_s2_cand(i,l-1);
               lls2candsum+=ll_s2_cand(i,l);
             }else{//final occasion
               //step from t-1 to t
-              ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+              if(useverts){
+                ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+              }else{
+                ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                  (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                  (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                    R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+              }
               lls2sum+=ll_s2(i,l-1);
               lls2candsum+=ll_s2_cand(i,l-1);
             }
@@ -1560,13 +1684,15 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               }else{
                 ll_s2(i,l-1)=ll_s2_cand(i,l-1);
               }
-              for(int j=0; j<Xidx(l); j++){
-                D(i,j,l) = dtmp(j,l);
-                lamd(i,j,l) = lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l) = pdcand(i,j,l);
+              if(primary(l)){
+                for(int j=0; j<Xidx(l); j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
           }
@@ -1579,7 +1705,16 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         lls2candsum=0;
         for(int i=0; i<M; i++) {
           for(int l=1; l<t; l++) {
-            ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+            if(useverts){
+              ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+            }else{
+              ll_s2_cand(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t_cand(0),FALSE)/
+                (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)-
+                  R::pnorm(xlim(0),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)));
+              ll_s2_cand(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t_cand(0),FALSE)/
+                (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)-
+                  R::pnorm(ylim(0),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)));
+            }
             lls2sum+=ll_s2(i,l-1);
             lls2candsum+=ll_s2_cand(i,l-1);
           }
@@ -1628,33 +1763,37 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
             //sum ll across j for each i and l
             llysum=0;
             llycandsum=0;
-            for(int j=0; j<Xidx(l); j++){
-              dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-              lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-              if(obstype==1){
-                pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-              }else{
-                ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-              }
-              if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                llycandsum+=ll_y_cand(i,j,l);
-              }
-              if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                llysum+=ll_y_curr(i,j,l);
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
               }
             }
             rand=Rcpp::runif(1);
             if((rand(0)<exp(llycandsum-llysum))){
               s2(i,l,0)=ScandX(0);
               s2(i,l,1)=ScandY(0);
-              for(int j=0; j<J; j++){
-                D(i,j,l) = dtmp(j,l);
-                lamd(i,j,l) = lamdcand(i,j,l);
-                if(obstype==1){
-                  pd(i,j,l) = pdcand(i,j,l);
+              if(primary(l)){
+                for(int j=0; j<J; j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
                 }
-                ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
               }
             }
           }
@@ -1703,7 +1842,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       }
       if((ACtype==2)|(ACtype==3)|(ACtype==5)){
         out(iteridx,idx)=sigma_t(0);
+        idx=idx+1;
       }
+      out(iteridx,idx)=psi;
       iteridx=iteridx+1;
     }
   }
@@ -1743,7 +1884,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                    int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
                    IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,NumericMatrix dSS,bool usedSS,
                    LogicalVector sexparms,IntegerVector choosesex,LogicalVector primary, IntegerMatrix s2cell,
-                   IntegerVector s1cell, bool dualACup, int propdualAC) {
+                   IntegerVector s1cell, bool dualACup, int propdualAC,NumericMatrix distances) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -1892,7 +2033,35 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
   //ll.s2
   NumericMatrix ll_s2(M,t);
   NumericMatrix ll_s2_cand(M,t);
-  if((ACtype==2)|(ACtype==5)){
+  if(ACtype==2){//metamu
+    for(int l=0; l<t; l++){
+      for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
+        if(useverts){
+          if(sex(i)==1){
+            ll_s2(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+          }else{
+            ll_s2(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+          }
+        }else{//truncate
+          if(sex(i)==1){
+            ll_s2(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t(0),FALSE)/
+              (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+                R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+            ll_s2(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t(0),FALSE)/
+              (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+                R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+          }else{
+            ll_s2(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t(1),FALSE)/
+              (R::pnorm(xlim(1),s1(i,0),sigma_t(1),TRUE,FALSE)-
+                R::pnorm(xlim(0),s1(i,0),sigma_t(1),TRUE,FALSE)));
+            ll_s2(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t(1),FALSE)/
+              (R::pnorm(ylim(1),s1(i,1),sigma_t(1),TRUE,FALSE)-
+                R::pnorm(ylim(0),s1(i,1),sigma_t(1),TRUE,FALSE)));
+          }
+        }
+      }
+    }
+  }else if(ACtype==5){//metamu2
     for(int l=0; l<t; l++){
       for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
         if(sex(i)==1){
@@ -1902,15 +2071,32 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         }
       }
     }
-  }else if(ACtype==3){
+  }else if(ACtype==3){//markov
     for(int l=1; l<t; l++){
       for(int i=0; i<M; i++) { //X and Y normal log-likelihood simplified
-        if(sex(i)==1){
-          ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+        if(useverts){
+          if(sex(i)==1){
+            ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+          }else{
+            ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+          }
         }else{
-          ll_s2(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+          if(sex(i)==1){
+            ll_s2(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t(0),FALSE)/
+              (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+            ll_s2(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t(0),FALSE)/
+              (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+          }else{
+            ll_s2(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t(1),FALSE)/
+              (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)-
+                R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)));
+            ll_s2(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t(1),FALSE)/
+              (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)-
+                R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)));
+          }
         }
-        ll_s2_cand(i,l-1)=ll_s2(i,l-1);
       }
     }
   }else if(ACtype==6){
@@ -1918,11 +2104,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
       for(int i=0; i<M; i++){ //X and Y normal log-likelihood simplified
         sumprob=0;
         for(int i2=0; i2<NdSS;i2++){
-          dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+          // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
           if(sex(i)==1){
-            distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+            distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2)/sigma_t(0)));
           }else{
-            distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+            distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(i,l-1),i2)/sigma_t(1)));
           }
           sumprob+=distsLL(i2);
         }
@@ -1930,7 +2116,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           distsLL(i2)=distsLL(i2)/sumprob;
         }
         ll_s2(i,l-1)=log(distsLL(s2cell(i,l)));
-        ll_s2_cand(i,l-1)=ll_s2(i,l-1);
+        // ll_s2_cand(i,l-1)=ll_s2(i,l-1);
       }
     }
   }
@@ -2959,7 +3145,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         ll_z(i,0)= z(i,0)*log(psi)+(1-z(i,0))*log(1-psi);
       }
 
-      //update sexes
+      // //update sexes
       swapsex=Rcpp::RcppArmadillo::sample(choosesex,propsex,FALSE);//choosesex only contains latent guys
       for(int i=0; i<propsex; i++){
         if(sex(swapsex(i))==1){
@@ -3028,8 +3214,38 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           //sex likelihood
           ll_sex_cand(swapsex(i))=(sex_cand(swapsex(i))-1)*log(psex)+(1-(sex_cand(swapsex(i))-1))*log(1-psex);
           //AC model likelihood
-          if((ACtype==2)|(ACtype==5)|(ACtype==3)){//
-            if((ACtype==2)|(ACtype==5)){//metamu
+          if((ACtype==2)|(ACtype==5)|(ACtype==3)|(ACtype==6)){//
+            if(ACtype==2){//metamu
+              lls2sum=0;
+              lls2candsum=0;
+              for(int l=0; l<t; l++){
+                if(useverts){
+                  if(sex_cand(swapsex(i))==1){
+                    ll_s2_cand(swapsex(i),l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(swapsex(i),l,0)-s1(swapsex(i),0),2.0)+pow(s2(swapsex(i),l,1)-s1(swapsex(i),1),2.0));
+                  }else{
+                    ll_s2_cand(swapsex(i),l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(swapsex(i),l,0)-s1(swapsex(i),0),2.0)+pow(s2(swapsex(i),l,1)-s1(swapsex(i),1),2.0));
+                  }
+                }else{//truncate
+                  if(sex_cand(swapsex(i))==1){
+                    ll_s2_cand(swapsex(i),l)=log(R::dnorm(s2(swapsex(i),l,0),s1(swapsex(i),0),sigma_t(0),FALSE)/
+                      (R::pnorm(xlim(1),s1(swapsex(i),0),sigma_t(0),TRUE,FALSE)-
+                        R::pnorm(xlim(0),s1(swapsex(i),0),sigma_t(0),TRUE,FALSE)));
+                    ll_s2_cand(swapsex(i),l)+=log(R::dnorm(s2(swapsex(i),l,1),s1(swapsex(i),1),sigma_t(0),FALSE)/
+                      (R::pnorm(ylim(1),s1(swapsex(i),1),sigma_t(0),TRUE,FALSE)-
+                        R::pnorm(ylim(0),s1(swapsex(i),1),sigma_t(0),TRUE,FALSE)));
+                  }else{
+                    ll_s2_cand(swapsex(i),l)=log(R::dnorm(s2(swapsex(i),l,0),s1(swapsex(i),0),sigma_t(1),FALSE)/
+                      (R::pnorm(xlim(1),s1(swapsex(i),0),sigma_t(1),TRUE,FALSE)-
+                        R::pnorm(xlim(0),s1(swapsex(i),0),sigma_t(1),TRUE,FALSE)));
+                    ll_s2_cand(swapsex(i),l)+=log(R::dnorm(s2(swapsex(i),l,1),s1(swapsex(i),1),sigma_t(1),FALSE)/
+                      (R::pnorm(ylim(1),s1(swapsex(i),1),sigma_t(1),TRUE,FALSE)-
+                        R::pnorm(ylim(0),s1(swapsex(i),1),sigma_t(1),TRUE,FALSE)));
+                  }
+                }
+                lls2sum+=ll_s2(swapsex(i),l);
+                lls2candsum+=ll_s2_cand(swapsex(i),l);
+              }
+            }else if(ACtype==5){//metamu2
               lls2sum=0;
               lls2candsum=0;
               for(int l=0; l<t; l++){
@@ -3041,15 +3257,54 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 lls2sum+=ll_s2(swapsex(i),l);
                 lls2candsum+=ll_s2_cand(swapsex(i),l);
               }
-            }else{//markov
+            }else if(ACtype==3){//markov
               lls2sum=0;
               lls2candsum=0;
               for(int l=1; l<t; l++) {
-                if(sex_cand(swapsex(i))==1){
-                  ll_s2_cand(swapsex(i),l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(swapsex(i),l,0)-s2(swapsex(i),l-1,0),2.0)+pow(s2(swapsex(i),l,1)-s2(swapsex(i),l-1,1),2.0));
+                if(useverts){
+                  if(sex_cand(swapsex(i))==1){
+                    ll_s2_cand(swapsex(i),l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(swapsex(i),l,0)-s2(swapsex(i),l-1,0),2.0)+pow(s2(swapsex(i),l,1)-s2(swapsex(i),l-1,1),2.0));
+                  }else{
+                    ll_s2_cand(swapsex(i),l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(swapsex(i),l,0)-s2(swapsex(i),l-1,0),2.0)+pow(s2(swapsex(i),l,1)-s2(swapsex(i),l-1,1),2.0));
+                  }
                 }else{
-                  ll_s2_cand(swapsex(i),l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(swapsex(i),l,0)-s2(swapsex(i),l-1,0),2.0)+pow(s2(swapsex(i),l,1)-s2(swapsex(i),l-1,1),2.0));
+                  if(sex_cand(swapsex(i))==1){
+                    ll_s2_cand(swapsex(i),l-1)=log(R::dnorm(s2(swapsex(i),l,0),s2(swapsex(i),l-1,0),sigma_t(0),FALSE)/
+                      (R::pnorm(xlim(1),s2(swapsex(i),l-1,0),sigma_t(0),TRUE,FALSE)-
+                        R::pnorm(xlim(0),s2(swapsex(i),l-1,0),sigma_t(0),TRUE,FALSE)));
+                    ll_s2_cand(swapsex(i),l-1)+=log(R::dnorm(s2(swapsex(i),l,1),s2(swapsex(i),l-1,1),sigma_t(0),FALSE)/
+                      (R::pnorm(ylim(1),s2(swapsex(i),l-1,1),sigma_t(0),TRUE,FALSE)-
+                        R::pnorm(ylim(0),s2(swapsex(i),l-1,1),sigma_t(0),TRUE,FALSE)));
+                  }else{
+                    ll_s2_cand(swapsex(i),l-1)=log(R::dnorm(s2(swapsex(i),l,0),s2(swapsex(i),l-1,0),sigma_t(1),FALSE)/
+                      (R::pnorm(xlim(1),s2(swapsex(i),l-1,0),sigma_t(1),TRUE,FALSE)-
+                        R::pnorm(xlim(0),s2(swapsex(i),l-1,0),sigma_t(1),TRUE,FALSE)));
+                    ll_s2_cand(swapsex(i),l-1)+=log(R::dnorm(s2(swapsex(i),l,1),s2(swapsex(i),l-1,1),sigma_t(1),FALSE)/
+                      (R::pnorm(ylim(1),s2(swapsex(i),l-1,1),sigma_t(1),TRUE,FALSE)-
+                        R::pnorm(ylim(0),s2(swapsex(i),l-1,1),sigma_t(1),TRUE,FALSE)));
+                  }
                 }
+                lls2sum+=ll_s2(swapsex(i),l-1);
+                lls2candsum+=ll_s2_cand(swapsex(i),l-1);
+              }
+            }else{//markov2
+              lls2sum=0;
+              lls2candsum=0;
+              for(int l=1; l<t; l++){
+                sumprob=0;
+                for(int i2=0; i2<NdSS;i2++){
+                  // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                  if(sex_cand(swapsex(i))==1){
+                    distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(swapsex(i),l-1),i2))/(sigma_t(0)));
+                  }else{
+                    distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(swapsex(i),l-1),i2))/(sigma_t(1)));
+                  }
+                  sumprob+=distsLL(i2);
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=distsLL(i2)/sumprob;
+                }
+                ll_s2_cand(swapsex(i),l-1)=log(distsLL(s2cell(swapsex(i),l)));
                 lls2sum+=ll_s2(swapsex(i),l-1);
                 lls2candsum+=ll_s2_cand(swapsex(i),l-1);
               }
@@ -3101,7 +3356,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           }
         }//not gamma rejected
       }
-
       //Update sex N
       for(int l=0; l<t; l++){
         Nm(l)=0;
@@ -3116,7 +3370,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           }
         }
       }
-
       //Update psex
       nfemale=0;
       for(int i=0; i<M; i++){
@@ -3129,7 +3382,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
       for(int i=0; i<M; i++){
         ll_sex(i)=(sex(i)-1)*log(psex)+(1-(sex(i)-1))*log(1-psex);
       }
-
       //Update phi
       if(sexparms(2)){//if time-specific survival
         for(int l=1; l<t; l++){
@@ -3172,7 +3424,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         }
       }
       //  Update gamma
-      // NOTE: Must update ll.z, Ez, etc...
       if(sexparms(3)==FALSE){//fixed
         rand=Rcpp::rnorm(1, gamma(0), propgamma(0));
         gamma_cand=rand(0);
@@ -3338,7 +3589,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 ll_z(i,l)=ll_z_cand(i,l);
               }
             }
-            // llzsum=llzcandsum;
           }
         }
       }
@@ -3367,7 +3617,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{
-              // inbox=inoutCppOpen(ScandX,ScandY,vertices);
               inbox(0)=FALSE;
               for(int p=0; p<polys; p++){
                 inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
@@ -3514,11 +3763,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             if(usedSS){
               sumprob=0;
               for(int i2=0; i2<NdSS;i2++){
-                dists(i2)=pow(pow(s2(i,l,0)-dSS(i2,0),2)+pow(s2(i,l,1)-dSS(i2,1),2),0.5);
+                // dists(i2)=pow(pow(s2(i,l,0)-dSS(i2,0),2)+pow(s2(i,l,1)-dSS(i2,1),2),0.5);
                 if(sex(i)==1){
-                  distsPP(i2)=exp(-dists(i2)*dists(i2)/(2*sigma(0)*sigma(0)));
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(0)*sigma(0)));
                 }else{
-                  distsPP(i2)=exp(-dists(i2)*dists(i2)/(2*sigma(1)*sigma(1)));
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(1)*sigma(1)));
                 }
                 sumprob+=distsPP(i2);
               }
@@ -3532,11 +3781,10 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               //backwards
               sumprob=0;
               for(int i2=0; i2<NdSS;i2++){
-                dists2(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                 if(sex(i)==1){
-                  distsBP(i2)=exp(-dists2(i2)*dists2(i2)/(2*sigma(0)*sigma(0)));
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(0)*sigma(0)));
                 }else{
-                  distsBP(i2)=exp(-dists2(i2)*dists2(i2)/(2*sigma(1)*sigma(1)));
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(1)*sigma(1)));
                 }
                 sumprob+=distsBP(i2);
               }
@@ -3590,10 +3838,28 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   }
                 }
               }
-              if(sex(i)==1){
-                ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
-              }else{
-                ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+              if((ACtype==5)|((ACtype==2)&useverts)){
+                if(sex(i)==1){
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                }else{
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                }
+              }else{//truncate
+                if(sex(i)==1){
+                  ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+                }else{
+                  ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(1),FALSE)/
+                    (R::pnorm(xlim(1),s1(i,0),sigma_t(1),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s1(i,0),sigma_t(1),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(1),FALSE)/
+                    (R::pnorm(ylim(1),s1(i,1),sigma_t(1),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s1(i,1),sigma_t(1),TRUE,FALSE)));
+                }
               }
               rand=Rcpp::runif(1);
               if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*MHratio){
@@ -3624,11 +3890,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             if(usedSS){
               sumprob=0;
               for(int i2=0; i2<NdSS;i2++){
-                dists(i2)=pow(pow(s2(i,l,0)-dSS(i2,0),2)+pow(s2(i,l,1)-dSS(i2,1),2),0.5);
+                // dists(i2)=pow(pow(s2(i,l,0)-dSS(i2,0),2)+pow(s2(i,l,1)-dSS(i2,1),2),0.5);
                 if(sex(i)==1){
-                  distsPP(i2)=exp(-dists(i2)*dists(i2)/(2*sigma(0)*sigma(0)));
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(0)*sigma(0)));
                 }else{
-                  distsPP(i2)=exp(-dists(i2)*dists(i2)/(2*sigma(1)*sigma(1)));
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(1)*sigma(1)));
                 }
                 sumprob+=distsPP(i2);
               }
@@ -3642,11 +3908,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               //backwards
               sumprob=0;
               for(int i2=0; i2<NdSS;i2++){
-                dists2(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                // dists2(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                 if(sex(i)==1){
-                  distsBP(i2)=exp(-dists2(i2)*dists2(i2)/(2*sigma(0)*sigma(0)));
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(0)*sigma(0)));
                 }else{
-                  distsBP(i2)=exp(-dists2(i2)*dists2(i2)/(2*sigma(1)*sigma(1)));
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(1)*sigma(1)));
                 }
                 sumprob+=distsBP(i2);
               }
@@ -3662,7 +3928,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               if(useverts==FALSE){
                 inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
               }else{
-                // inbox=inoutCppOpen(ScandX,ScandY,vertices);
                 inbox(0)=FALSE;
                 for(int p=0; p<polys; p++){
                   inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
@@ -3679,7 +3944,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               if(primary(l)){
                 for(int j=0; j<Xidx(l); j++){
                   dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-                  if(sex(i==1)){
+                  if(sex(i)==1){
                     lamdcand(i,j,l)=lam0(0)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(0)*sigma(0)));
                   }else{
                     lamdcand(i,j,l)=lam0(1)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(1)*sigma(1)));
@@ -3701,51 +3966,128 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               lls2sum=0;
               lls2candsum=0;
               if(ACtype==3){
-                if(l==0){ //first occasion
-                  //step from 1 to 2
-                  if(sex(i)==1){
-                    ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
-                  }else{
-                    ll_s2_cand(i,0)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                if(useverts){
+                  if(l==0){ //first occasion
+                    //step from 1 to 2
+                    if(sex(i)==1){
+                      ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                    }else{
+                      ll_s2_cand(i,0)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                    }
+                    lls2sum+=ll_s2(i,0);
+                    lls2candsum+=ll_s2_cand(i,0);
+                  }else if((l>0)&(l<(t-1))){//middle occasions
+                    if(sex(i)==1){
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                    }else{
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2sum+=ll_s2(i,l);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l);
+                  }else{//final occasion
+                    //step from t-1 to t
+                    if(sex(i)==1){
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                    }else{
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l-1);
                   }
-                  lls2sum+=ll_s2(i,0);
-                  lls2candsum+=ll_s2_cand(i,0);
-                }else if((l>0)&(l<(t-1))){//middle occasions
-                  if(sex(i)==1){
-                    //step from l-1 to l
-                    ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                    //step from l to l+1
-                    ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                }else{//truncate
+                  if(l==0){ //first occasion
+                    //step from 1 to 2
+                    if(sex(i)==1){
+                      ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                    }else{
+                      ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(1),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(1),TRUE,FALSE)));
+                      ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(1),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(1),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,0);
+                    lls2candsum+=ll_s2_cand(i,0);
+                  }else if((l>0)&(l<(t-1))){//middle occasions
+                    if(sex(i)==1){
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                    }else{
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(1),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(1),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(1),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(1),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(1),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(1),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2sum+=ll_s2(i,l);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l);
                   }else{
-                    //step from l-1 to l
-                    ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                    //step from l to l+1
-                    ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                    if(sex(i)==1){
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                    }else{
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(1),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(1),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l-1);
                   }
-                  lls2sum+=ll_s2(i,l-1);
-                  lls2sum+=ll_s2(i,l);
-                  lls2candsum+=ll_s2_cand(i,l-1);
-                  lls2candsum+=ll_s2_cand(i,l);
-                }else{//final occasion
-                  //step from t-1 to t
-                  if(sex(i)==1){
-                    ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                  }else{
-                    ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                  }
-                  lls2sum+=ll_s2(i,l-1);
-                  lls2candsum+=ll_s2_cand(i,l-1);
                 }
               }else{//markov2
                 if(l==0){ //first occasion
                   //step from 1 to 2
                   sumprob=0;
                   for(int i2=0; i2<NdSS;i2++){
-                    dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
                     }else{
-                      distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                      distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(1)));
                     }
                     sumprob+=distsLL(i2);
                   }
@@ -3759,11 +4101,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   //step from l-1 to l
                   sumprob=0;
                   for(int i2=0; i2<NdSS;i2++){
-                    dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
                     }else{
-                      distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                      distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(1)));
                     }
                     sumprob+=distsLL(i2);
                   }
@@ -3774,11 +4116,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   //step from l to l+1
                   sumprob=0;
                   for(int i2=0; i2<NdSS;i2++){
-                    dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
                     }else{
-                      distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                      distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(1)));
                     }
                     sumprob+=distsLL(i2);
                   }
@@ -3794,11 +4136,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   //step from t-1 to t
                   sumprob=0;
                   for(int i2=0; i2<NdSS;i2++){
-                    dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
                     }else{
-                      distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                      distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(1)));
                     }
                     sumprob+=distsLL(i2);
                   }
@@ -3812,6 +4154,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 }
               }
               rand=Rcpp::runif(1);
+              // if(l==2){
               if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))*MHratio){
                 s2(i,l,0)=ScandX(0);
                 s2(i,l,1)=ScandY(0);
@@ -3836,6 +4179,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                     ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
                   }
                 }
+              // }
               }
             }
           }
@@ -3843,7 +4187,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
       }
       //Patch AC update
       if(dualACup){
-        if(iter%propdualAC==0){
+        if((iter+1) % propdualAC==0){
           if(ACtype==1){//fixed
             for(int i=0; i<M; i++) {
               int skip=0;
@@ -3856,11 +4200,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 sumprob=0;
                 for(int i2=0; i2<NdSS; i2++) {
                   if(dSS(i2,3)!=currpatch){
-                    dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                      distsPP(i2)=exp((-distances(s1cell(i),i2)*distances(s1cell(i),i2))/(2*sigma(0)*sigma(0)));
                     }else{
-                      distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                      distsPP(i2)=exp((-distances(s1cell(i),i2)*distances(s1cell(i),i2))/(2*sigma(1)*sigma(1)));
                     }
                     sumprob+=distsPP(i2);
                   }else{
@@ -3880,11 +4224,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 sumprob=0;
                 for(int i2=0; i2<NdSS; i2++){
                   if(dSS(i2,3)!=backpatch){
-                    dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                    // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                     if(sex(i)==1){
-                      distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                      distsBP(i2)=exp((-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2))/(2*sigma(0)*sigma(0)));
                     }else{
-                      distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                      distsBP(i2)=exp((-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2))/(2*sigma(1)*sigma(1)));
                     }
                     sumprob+=distsBP(i2);
                   }else{
@@ -3952,11 +4296,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++) {
                     if(dSS(i2,3)!=currpatch){
-                      dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);//wrong anyway
                       if(sex(i)==1){
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsPP(i2);
                     }else{
@@ -3976,11 +4320,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++){
                     if(dSS(i2,3)!=backpatch){
-                      dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                       if(sex(i)==1){
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsBP(i2);
                     }else{
@@ -4043,11 +4387,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++) {
                     if(dSS(i2,3)!=currpatch){
-                      dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
                       if(sex(i)==1){
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsPP(i2);
                     }else{
@@ -4067,11 +4411,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++){
                     if(dSS(i2,3)!=backpatch){
-                      dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                       if(sex(i)==1){
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsBP(i2);
                     }else{
@@ -4104,10 +4448,28 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                       }
                     }
                   }
-                  if(sex(i)==1){
-                    ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
-                  }else{
-                    ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                  if((ACtype==5)|((ACtype==2)&useverts)){
+                    if(sex(i)==1){
+                      ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                    }else{
+                      ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                    }
+                  }else{//truncate
+                    if(sex(i)==1){
+                      ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+                    }else{
+                      ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(1),FALSE)/
+                        (R::pnorm(xlim(1),s1(i,0),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s1(i,0),sigma_t(1),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(1),FALSE)/
+                        (R::pnorm(ylim(1),s1(i,1),sigma_t(1),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s1(i,1),sigma_t(1),TRUE,FALSE)));
+                    }
                   }
                   rand=Rcpp::runif(1);
                   if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*(distsBP(s1cell(i))/distsPP(s1cellcand(i)))){
@@ -4138,11 +4500,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++){
                     if(dSS(i2,3)!=currpatch){
-                      dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(s1(i2,0)-dSS(i2,0),2)+pow(s1(i2,1)-dSS(i2,1),2),0.5);
                       if(sex(i)==1){
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsPP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsPP(i2);
                     }else{
@@ -4162,11 +4524,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   sumprob=0;
                   for(int i2=0; i2<NdSS; i2++){
                     if(dSS(i2,3)!=backpatch){
-                      dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                      // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                       if(sex(i)==1){
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(0)*sigma(0)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
                       }else{
-                        distsBP(i2)=exp((-dists(i2)*dists(i2))/(2*sigma(1)*sigma(1)));
+                        distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(1)*sigma(1)));
                       }
                       sumprob+=distsBP(i2);
                     }else{
@@ -4182,7 +4544,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   if(primary(l)){
                     for(int j=0; j<Xidx(l); j++){
                       dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-                      if(sex(i==1)){
+                      if(sex(i)==1){
                         lamdcand(i,j,l)=lam0(0)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(0)*sigma(0)));
                       }else{
                         lamdcand(i,j,l)=lam0(1)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(1)*sigma(1)));
@@ -4204,51 +4566,129 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                   lls2sum=0;
                   lls2candsum=0;
                   if(ACtype==3){
-                    if(l==0){ //first occasion
-                      //step from 1 to 2
-                      if(sex(i)==1){
-                        ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
-                      }else{
-                        ll_s2_cand(i,0)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                    if(useverts){
+                      if(l==0){ //first occasion
+                        //step from 1 to 2
+                        if(sex(i)==1){
+                          ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                        }else{
+                          ll_s2_cand(i,0)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                        }
+                        lls2sum+=ll_s2(i,0);
+                        lls2candsum+=ll_s2_cand(i,0);
+                      }else if((l>0)&(l<(t-1))){//middle occasions
+                        if(sex(i)==1){
+                          //step from l-1 to l
+                          ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                          //step from l to l+1
+                          ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                        }else{
+                          //step from l-1 to l
+                          ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                          //step from l to l+1
+                          ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                        }
+                        lls2sum+=ll_s2(i,l-1);
+                        lls2sum+=ll_s2(i,l);
+                        lls2candsum+=ll_s2_cand(i,l-1);
+                        lls2candsum+=ll_s2_cand(i,l);
+                      }else{//final occasion
+                        //step from t-1 to t
+                        if(sex(i)==1){
+                          ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                        }else{
+                          ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                        }
+                        lls2sum+=ll_s2(i,l-1);
+                        lls2candsum+=ll_s2_cand(i,l-1);
                       }
-                      lls2sum+=ll_s2(i,0);
-                      lls2candsum+=ll_s2_cand(i,0);
-                    }else if((l>0)&(l<(t-1))){//middle occasions
-                      if(sex(i)==1){
-                        //step from l-1 to l
-                        ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                        //step from l to l+1
-                        ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                    }else{
+                      if(l==0){ //first occasion
+                        //step from 1 to 2
+                        if(sex(i)==1){
+                          ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
+                            (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                          ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
+                            (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                        }else{
+                          ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(1),FALSE)/
+                            (R::pnorm(xlim(1),ScandX(0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(xlim(0),ScandX(0),sigma_t(1),TRUE,FALSE)));
+                          ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(1),FALSE)/
+                            (R::pnorm(ylim(1),ScandY(0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(ylim(0),ScandY(0),sigma_t(1),TRUE,FALSE)));
+                        }
+                        lls2sum+=ll_s2(i,0);
+                        lls2candsum+=ll_s2_cand(i,0);
+                      }else if((l>0)&(l<(t-1))){//middle occasions
+                        if(sex(i)==1){
+                          //step from l-1 to l
+                          ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                            (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                          ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                            (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                          //step from l to l+1
+                          ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
+                            (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                          ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
+                            (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                        }else{
+                          //step from l-1 to l
+                          ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(1),FALSE)/
+                            (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)));
+                          ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(1),FALSE)/
+                            (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)));
+                          //step from l to l+1
+                          ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(1),FALSE)/
+                            (R::pnorm(xlim(1),ScandX(0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(xlim(0),ScandX(0),sigma_t(1),TRUE,FALSE)));
+                          ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(1),FALSE)/
+                            (R::pnorm(ylim(1),ScandY(0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(ylim(0),ScandY(0),sigma_t(1),TRUE,FALSE)));
+                        }
+                        lls2sum+=ll_s2(i,l-1);
+                        lls2sum+=ll_s2(i,l);
+                        lls2candsum+=ll_s2_cand(i,l-1);
+                        lls2candsum+=ll_s2_cand(i,l);
                       }else{
-                        //step from l-1 to l
-                        ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                        //step from l to l+1
-                        ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                        if(sex(i)==1){
+                          ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                            (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                          ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                            (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                              R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                        }else{
+                          ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(1),FALSE)/
+                            (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(1),TRUE,FALSE)));
+                          ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(1),FALSE)/
+                            (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)-
+                              R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(1),TRUE,FALSE)));
+                        }
+                        lls2sum+=ll_s2(i,l-1);
+                        lls2candsum+=ll_s2_cand(i,l-1);
                       }
-                      lls2sum+=ll_s2(i,l-1);
-                      lls2sum+=ll_s2(i,l);
-                      lls2candsum+=ll_s2_cand(i,l-1);
-                      lls2candsum+=ll_s2_cand(i,l);
-                    }else{//final occasion
-                      //step from t-1 to t
-                      if(sex(i)==1){
-                        ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                      }else{
-                        ll_s2_cand(i,l-1)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-                      }
-                      lls2sum+=ll_s2(i,l-1);
-                      lls2candsum+=ll_s2_cand(i,l-1);
                     }
-                  }else{//markov2
+
+                }else{//markov2
                     if(l==0){ //first occasion
                       //step from 1 to 2
                       sumprob=0;
                       for(int i2=0; i2<NdSS;i2++){
-                        dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                        // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                         if(sex(i)==1){
-                          distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
                         }else{
-                          distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(1)));
                         }
                         sumprob+=distsLL(i2);
                       }
@@ -4262,11 +4702,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                       //step from l-1 to l
                       sumprob=0;
                       for(int i2=0; i2<NdSS;i2++){
-                        dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                        // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
                         if(sex(i)==1){
-                          distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
                         }else{
-                          distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                          distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(1)));
                         }
                         sumprob+=distsLL(i2);
                       }
@@ -4277,11 +4717,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                       //step from l to l+1
                       sumprob=0;
                       for(int i2=0; i2<NdSS;i2++){
-                        dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+                        // dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
                         if(sex(i)==1){
-                          distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
                         }else{
-                          distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                          distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(1)));
                         }
                         sumprob+=distsLL(i2);
                       }
@@ -4297,11 +4737,11 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                       //step from t-1 to t
                       sumprob=0;
                       for(int i2=0; i2<NdSS;i2++){
-                        dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                        // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
                         if(sex(i)==1){
-                          distsLL(i2)=(1/sigma_t(0))*exp(-(dists(i2))/(sigma_t(0)));
+                          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
                         }else{
-                          distsLL(i2)=(1/sigma_t(1))*exp(-(dists(i2))/(sigma_t(1)));
+                          distsLL(i2)=(1/sigma_t(1))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(1)));
                         }
                         sumprob+=distsLL(i2);
                       }
@@ -4355,10 +4795,23 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               lls2candsum=0;
               for(int i=0; i<M; i++) {
                 for(int l=1; l<t; l++) {
-                  if(sex(i)==(i2+1)){
-                    ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+                  if(useverts){
+                    if(sex(i)==(i2+1)){
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+                    }else{
+                      ll_s2_cand(i,l-1)=ll_s2(i,l-1);
+                    }
                   }else{
-                    ll_s2_cand(i,l-1)=ll_s2(i,l-1);
+                    if(sex(i)==(i2+1)){
+                      ll_s2_cand(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t_cand(0),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t_cand(0),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)));
+                    }else{
+                      ll_s2_cand(i,l-1)=ll_s2(i,l-1);
+                    }
                   }
                   lls2sum+=ll_s2(i,l-1);
                   lls2candsum+=ll_s2_cand(i,l-1);
@@ -4382,7 +4835,16 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             lls2candsum=0;
             for(int i=0; i<M; i++) {
               for(int l=1; l<t; l++) {
-                ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+                if(useverts){
+                  ll_s2_cand(i,l-1)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s2(i,l-1,0),2.0)+pow(s2(i,l,1)-s2(i,l-1,1),2.0));
+                }else{
+                  ll_s2_cand(i,l-1)=log(R::dnorm(s2(i,l,0),s2(i,l-1,0),sigma_t_cand(0),FALSE)/
+                    (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s2(i,l-1,0),sigma_t_cand(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l-1)+=log(R::dnorm(s2(i,l,1),s2(i,l-1,1),sigma_t_cand(0),FALSE)/
+                    (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s2(i,l-1,1),sigma_t_cand(0),TRUE,FALSE)));
+                }
                 lls2sum+=ll_s2(i,l-1);
                 lls2candsum+=ll_s2_cand(i,l-1);
               }
@@ -4411,8 +4873,8 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 for(int i=0; i<M; i++){ //X and Y normal log-likelihood simplified
                   sumprob=0;
                   for(int i2=0; i2<NdSS;i2++){
-                    dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
-                    distsPP(i2)=(1/sigma_t_cand(0))*exp(-(dists(i2))/(sigma_t_cand(0)));
+                    // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                    distsPP(i2)=(1/sigma_t_cand(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t_cand(0)));
                     sumprob+=distsPP(i2);
                   }
                   for(int i2=0; i2<NdSS;i2++){
@@ -4447,8 +4909,8 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               for(int i=0; i<M; i++){ //X and Y normal log-likelihood simplified
                 sumprob=0;
                 for(int i2=0; i2<NdSS;i2++){
-                  dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
-                  distsLL(i2)=(1/sigma_t_cand(0))*exp(-(dists(i2))/(sigma_t_cand(0)));
+                  // dists(i2)=pow(pow(s2(i,l-1,0)-dSS(i2,0),2)+pow(s2(i,l-1,1)-dSS(i2,1),2),0.5);
+                  distsLL(i2)=(1/sigma_t_cand(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t_cand(0)));
                   sumprob+=distsLL(i2);
                 }
                 for(int i2=0; i2<NdSS;i2++){
@@ -4460,7 +4922,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               }
             }
             rand=Rcpp::runif(1);
-            if (rand(0) < exp(lls2candsum - lls2sum)) {
+            if(rand(0) < exp(lls2candsum - lls2sum)) {
               sigma_t(0)=sigma_t_cand(0);
               sigma_t(1)=sigma_t_cand(0);
               for(int i=0; i<M; i++) {
@@ -4476,23 +4938,22 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         for(int i=0; i<M; i++) {
           ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
           ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
-          if(usedSS){
-            double mindist=100000;
-            int idxdist=0;
-            for(int i2=0; i2<NdSS;i2++){
-              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-              if(dists(i2)<mindist){
-                mindist=dists(i2);
-                idxdist=i2;
-              }
-            }
-            ScandX(0)=dSS(idxdist,0);
-            ScandY(0)=dSS(idxdist,1);
-          }
+          // if(usedSS){
+          //   double mindist=100000;
+          //   int idxdist=0;
+          //   for(int i2=0; i2<NdSS;i2++){
+          //     dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+          //     if(dists(i2)<mindist){
+          //       mindist=dists(i2);
+          //       idxdist=i2;
+          //     }
+          //   }
+          //   ScandX(0)=dSS(idxdist,0);
+          //   ScandY(0)=dSS(idxdist,1);
+          // }
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{
-            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
             inbox(0)=FALSE;
             for(int p=0; p<polys; p++){
               inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
@@ -4505,10 +4966,28 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             lls2sum=0;
             lls2candsum=0;
             for(int l=0; l<t; l++) {
-              if(sex(i)==1){
-                ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
-              }else{
-                ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
+              if((ACtype==5)|((ACtype==2)&useverts)){
+                if(sex(i)==1){
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
+                }else{
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(1),2.0))-(1/(2*pow(sigma_t(1),2.0)))*(pow(s2(i,l,0)-ScandX(0),2.0)+pow(s2(i,l,1)-ScandY(0),2.0));
+                }
+              }else{//truncate
+                if(sex(i)==1){
+                  ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),ScandX(0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),ScandY(0),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                }else{
+                  ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),ScandX(0),sigma_t(1),FALSE)/
+                    (R::pnorm(xlim(1),ScandX(0),sigma_t(1),TRUE,FALSE)-
+                      R::pnorm(xlim(0),ScandX(0),sigma_t(1),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),ScandY(0),sigma_t(1),FALSE)/
+                    (R::pnorm(ylim(1),ScandY(0),sigma_t(1),TRUE,FALSE)-
+                      R::pnorm(ylim(0),ScandY(0),sigma_t(1),TRUE,FALSE)));
+                }
               }
               lls2sum+=ll_s2(i,l);
               lls2candsum+=ll_s2_cand(i,l);
@@ -4532,10 +5011,23 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
               lls2candsum=0;
               for(int i=0; i<M; i++) {
                 for(int l=0; l<t; l++) {
-                  if(sex(i)==(i2+1)){
-                    ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+                  if((ACtype==5)|((ACtype==2)&useverts)){
+                    if(sex(i)==(i2+1)){
+                      ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+                    }else{
+                      ll_s2_cand(i,l)=ll_s2(i,l);
+                    }
                   }else{
-                    ll_s2_cand(i,l)=ll_s2(i,l);
+                    if(sex(i)==(i2+1)){
+                      ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t_cand(0),FALSE)/
+                        (R::pnorm(xlim(1),s1(i,0),sigma_t_cand(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s1(i,0),sigma_t_cand(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t_cand(0),FALSE)/
+                        (R::pnorm(ylim(1),s1(i,1),sigma_t_cand(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s1(i,1),sigma_t_cand(0),TRUE,FALSE)));
+                    }else{
+                      ll_s2_cand(i,l)=ll_s2(i,l);
+                    }
                   }
                   lls2sum+=ll_s2(i,l);
                   lls2candsum+=ll_s2_cand(i,l);
@@ -4559,7 +5051,16 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             lls2candsum=0;
             for(int i=0; i<M; i++) {
               for(int l=0; l<t; l++) {
-                ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+                if((ACtype==5)|((ACtype==2)&useverts)){
+                  ll_s2_cand(i,l)=-log(pow(sigma_t_cand(0),2.0))-(1/(2*pow(sigma_t_cand(0),2.0)))*(pow(s2(i,l,0)-s1(i,0),2.0)+pow(s2(i,l,1)-s1(i,1),2.0));
+                }else{
+                  ll_s2_cand(i,l)=log(R::dnorm(s2(i,l,0),s1(i,0),sigma_t_cand(0),FALSE)/
+                    (R::pnorm(xlim(1),s1(i,0),sigma_t_cand(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s1(i,0),sigma_t_cand(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l,1),s1(i,1),sigma_t_cand(0),FALSE)/
+                    (R::pnorm(ylim(1),s1(i,1),sigma_t_cand(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s1(i,1),sigma_t_cand(0),TRUE,FALSE)));
+                }
                 lls2sum+=ll_s2(i,l);
                 lls2candsum+=ll_s2_cand(i,l);
               }
@@ -4577,7 +5078,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           }
         }
       }
-
 
       //Record output ll_y_curr.subcube(i,0,0,i,maxJ-1,0) s2yout(nstore,M,t)
       if(((iter+1)>nburn)&((iter+1) % nthin==0)){
@@ -4638,6 +5138,8 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
           }
         }
         out(iteridx,idx)=psex;
+        idx=idx+1;
+        out(iteridx,idx)=psi;
         iteridx=iteridx+1;
       }
   }

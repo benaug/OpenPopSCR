@@ -7,7 +7,7 @@
 simOpenSCR(N = c(40, 60, 80), gamma = NULL, phi = rep(0.8, 2),
   lam0 = rep(0.2, 3), sigma = rep(0.5, 3), K = rep(10, 3), X = X,
   t = 3, M = M, sigma_t = NULL, buff = 3, obstype = "bernoulli",
-  ACtype = "fixed", vertices = NA, maxprop = 10000)
+  ACtype = "fixed", vertices = NA, maxprop = 10000, primary = NA)
 }
 \arguments{
 \item{N}{a vector indicating the number of individuals to simulate. If size 1, provide a gamma to determine N in subsequent years.
@@ -43,6 +43,8 @@ with a meta mu and sigma_t with yearly activity centers required to stay inside 
 the same as "metamu" except only meta mus are required to stay inside the state space.  markov" assumes activity
 centers in year t+1 is a bivariate normal draw centered around the activity center in year t (but must stay within
 the state space), and "independent" assumes animals randomly mix between years.}
+
+\item{vertices}{a list of polygon vertices for each year if state space is not rectangular}
 }
 \value{
 a list containing the capture history, activity centers, trap object, and several other data objects and summaries.

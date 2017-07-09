@@ -109,7 +109,7 @@ simOpenSCRsex <-
       if(!is.list(vertices)){
         stop("vertices must be a list")
       }
-      if(any(!unlist(lapply(poly,is.matrix)))){
+      if(any(!unlist(lapply(vertices,is.matrix)))){
         stop("not all vertices list elements are matrices")
       }
     }
@@ -275,7 +275,7 @@ simOpenSCRsex <-
         }
         if(primary[i]==1){
           D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-          lamd[,,i]=lam0[sex[i]]*exp(-D[,,i]^2/(2*sigma[sex[i]]*sigma[sex[i]]))
+          lamd[,,i]=lam0[sex]*exp(-D[,,i]^2/(2*sigma[sex]*sigma[sex]))
         }
       }
     }else if(ACtype=="markov2"){

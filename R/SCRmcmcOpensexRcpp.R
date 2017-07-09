@@ -74,8 +74,8 @@ SCRmcmcOpensexRcpp <-
       xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
       xlim=xylim[,1]+c(-buff,buff)
       ylim=xylim[,2]+c(-buff,buff)
-      vertices=list(rbind(c(xlim[1],ylim[1]-buff),c(xlim[1]-buff,ylim[2]),
-                          c(xlim[2],ylim[2]+buff),c(xlim[2]+buff,ylim[1])))
+      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),
+                          c(xlim[2],ylim[2]),c(xlim[2],ylim[1]),c(xlim[1],ylim[1])))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -457,14 +457,14 @@ SCRmcmcOpensexRcpp <-
         }
         #calculate likelihoods
         if(ACtype%in%c("metamu","metamu2")){
-          ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
-          ll.s2.cand=ll.s2
+          # ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
+          # ll.s2.cand=ll.s2
         }else if(ACtype%in%c("markov")){
-          ll.s2=matrix(NA,nrow=M,ncol=t-1)
-          for(l in 2:t){
-            ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
-          }
-          ll.s2.cand=ll.s2
+          # ll.s2=matrix(NA,nrow=M,ncol=t-1)
+          # for(l in 2:t){
+          #   ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
+          # }
+          # ll.s2.cand=ll.s2
         }
       }else if(ACtype=="independent"){
         for(l in 1:t){
@@ -617,9 +617,26 @@ SCRmcmcOpensexRcpp <-
             }
           }
           ll.s2.cand=ll.s2
-        }else if(ACtype%in%c("fixed","independent")){
+        }else if(ACtype%in%c("fixed")){
           for(l in 1:t){
             s2[,l,]=s1
+          }
+        }else if(ACtype%in%c("independent")){
+          cap=1*(!is.na(s2[,1,1]))
+          for(i in 1:n){
+            for(l in 1:t){
+              if(is.na(s2[i,l,1])&cap[i]==1){
+                s2[i,l,]=s2[i,l-1,]
+              }else if(is.na(s2[i,l,1])&cap[i]==0){
+                s2[i,l,]=s2[i,which(!is.na(s2[i,,1]))[1],]
+                cap[i]=1
+              }
+            }
+          }
+          for(i in (n+1):M){
+            for(l in 1:t){
+              s2[i,l,]=s1[i,]
+            }
           }
         }
         if(ACtype%in%c("fixed","independent","metamu","metamu2","markov")){
@@ -633,6 +650,11 @@ SCRmcmcOpensexRcpp <-
               s2[i,l,]=dSS[s2.cell[i,l],1:2]
             }
           }
+        }
+        ##precalculate distance matrix
+        distances=matrix(NA,nrow=NdSS,ncol=NdSS)
+        for(i in 1:NdSS){
+          distances[i,]=sqrt((dSS[i,1]-dSS[,1])^2+(dSS[i,2]-dSS[,2])^2)
         }
       }
 
@@ -751,9 +773,9 @@ SCRmcmcOpensexRcpp <-
     npar=sum(each)+3*t+1#added one for psex
     if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       if(sexparms$sigma_t=="fixed"){
-        npar=npar+1
-      }else{
         npar=npar+2
+      }else{
+        npar=npar+3
       }
     }
     if(length(lam0)==1){
@@ -817,6 +839,7 @@ SCRmcmcOpensexRcpp <-
     if(usedSS==FALSE){
       s1.cell=rep(1,M)
       s2.cell=matrix(1,nrow=M,ncol=t)
+      distances=matrix(c(0,0,0,0),nrow=2,ncol=2)
     }
     if(!dualACup){#dummy for Rcpp
       proppars$dualAC=1
@@ -831,7 +854,7 @@ SCRmcmcOpensexRcpp <-
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,proppars$sex,sigma_t,niter,nburn,nthin,npar,each,jointZ,
                     zpossible,apossible,cancel,obstype2,tf2,dSS,usedSS,sexparmsin,which(known.sex==0)-1,primaryin,
-                    s2.cell-1,s1.cell-1,dualACup,proppars$dualAC)
+                    s2.cell-1,s1.cell-1,dualACup,proppars$dualAC,distances)
 
 
 
@@ -880,13 +903,13 @@ SCRmcmcOpensexRcpp <-
     Nnames=paste("N",1:t,sep="")
     Nmnames=paste("Nm",1:t,sep="")
     Nfnames=paste("Nf",1:t,sep="")
-    if(ACtype%in%c(2,3,5)){
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,Nmnames,Nfnames,sigmatnames,"psex")
+    if(ACtype%in%c(2,3,5,6)){
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,Nmnames,Nfnames,sigmatnames,"psex","psi")
     }else{
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,Nmnames,Nfnames,"psex")
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,Nmnames,Nfnames,"psex","psi")
     }
     if(keepACs==TRUE){
-      if(ACtype%in%c(2,3,4,5)){
+      if(ACtype%in%c(2,3,4,5,6)){
         list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)
       }else{
         list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout)

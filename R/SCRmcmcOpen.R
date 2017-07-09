@@ -1,5 +1,5 @@
 SCRmcmcOpen <-
-  function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
+  function(data,niter=1000,nburn=0, nthin=1,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
            jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA){
     library(abind)
     t=dim(data$y)[3]
@@ -17,7 +17,39 @@ SCRmcmcOpen <-
     if(length(X)!=t){
       stop("must input traps for each year")
     }
-
+    if("primary"%in%names(data)){
+      primary=data$primary
+      if(primary[1]==0){
+        stop("first primary period must be a 1 (data recorded)")
+      }
+    }else{
+      primary=rep(1,t)
+    }
+    #make sure X list elements are matrices
+    for(l in 1:length(X)){
+      if(primary[l]==1){
+        X[[l]]=as.matrix(X[[l]])
+      }else{
+        for(l in 1:t){
+          if(primary[l]==0){
+            X[[l]]=matrix(nrow=0,ncol=0)
+          }
+        }
+      }
+    }
+    dSS=as.matrix(dSS)
+    if(!is.na(dSS[1])){
+      usedSS=TRUE
+      if("vertices"%in%names(data)){
+        rem=which(names(data)=="vertices")
+        data[[rem]]=NULL
+        warning("Discarding vertices since dSS supplied")
+      }
+      NdSS=nrow(dSS)
+      useverts=FALSE
+    }else{
+      usedSS=FALSE
+    }
     J<-data$J
     maxJ=max(J)
     K<-data$K
@@ -38,9 +70,19 @@ SCRmcmcOpen <-
       ylim=c(min(unlist(lapply(vertices,function(x){min(x[,2])}))),max(unlist(lapply(vertices,function(x){max(x[,2])}))))
     }else if("buff"%in%names(data)){
       buff<- data$buff
-      xlim<- c(min(unlist(lapply(X,function(x){min(x[,1])}))),min(unlist(lapply(X,function(x){max(x[,1])}))))+c(-buff, buff)
-      ylim<- c(min(unlist(lapply(X,function(x){min(x[,2])}))),min(unlist(lapply(X,function(x){max(x[,2])}))))+c(-buff, buff)
-      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),c(xlim[2],ylim[2]),c(xlim[2],ylim[1])))
+      minmax=array(NA,dim=c(sum(primary==1),2,2))
+      idx=1
+      for(l in 1:length(X)){
+        if(primary[l]==1){
+          minmax[idx,,]=rbind(apply(X[[l]],2,min),apply(X[[l]],2,max))
+          idx=idx+1
+        }
+      }
+      xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
+      xlim=xylim[,1]+c(-buff,buff)
+      ylim=xylim[,2]+c(-buff,buff)
+      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),
+                          c(xlim[2],ylim[2]),c(xlim[2],ylim[1]),c(xlim[1],ylim[1])))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -51,24 +93,29 @@ SCRmcmcOpen <-
         stop("If using a trap operation file, must input one for each year")
       }
       for(i in 1:length(X)){
-        if(is.matrix(tf[[i]])){
-          stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
-        }
-        if(nrow(X[[i]])!=length(tf[[i]])){
-          stop("If using trap operation file, must enter operation for every trap")
+        if(primary[l]==1){
+          if(is.matrix(tf[[l]])){
+            stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
+          }
+          if(nrow(X[[l]])!=length(tf[[l]])){
+            stop("If using trap operation file, must enter operation for every trap")
+          }
         }
       }
     }else{
       tf=vector("list",t)
       for(l in 1:t){
-        tf[[l]]=rep(K[l],nrow(X[[i]]))
+        if(primary[l]==1){
+          tf[[l]]=rep(K[l],nrow(X[[l]]))
+        }
       }
     }
     #make tf into matrix
     for(l in 1:t){
-      tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
+      if(primary[l]==1){
+        tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
+      }
     }
-
 
     ##pull out initial values
     lam0<- inits$lam0
@@ -228,131 +275,341 @@ SCRmcmcOpen <-
     }
     ll.z.cand=ll.z
     gamma.prime.cand=gamma.prime
-    #Optimize starting locations given where they are trapped. Initalizing s1 and s2 at same locs
-
-    s1<- cbind(runif(M,xlim[1],xlim[2]), runif(M,ylim[1],ylim[2])) #assign random locations
-    idx=which(known.vector==1) #switch for those actually caught
-    for(i in idx){
-      trps=matrix(0,nrow=0,ncol=2)
-      for(j in 1:t){ #loop over t to get all cap locs
-        trps<- rbind(trps,X[[j]][which(y[i,,j]>0),1:2])
-      }
-      s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
-    }
-    if(length(dSS)>1){
-      usedSS=TRUE
-    }else{
-      usedSS=FALSE
-    }
+    #Initialize s1 and s2
     if(!usedSS){
-      #check to make sure everyone is in polygon
-      if(useverts==TRUE){
-        inside=rep(NA,nrow(s1))
-        for(i in 1:nrow(s1)){
-          # inside[i]=inout(s1[i,],vertices)
-          inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
-        }
-        idx2=which(inside==FALSE)
-        if(any(idx2%in%idx)){
-          warning("Vertices too complicated for this AC initialization algorithm to provide good starting values.
-                  Either hassle Ben to fix it or use a discrete state space")
-        }
-        if(length(idx2)>0){
-          for(i in 1:length(idx)){
-            while(inside[idx2[i]]==FALSE){
-              s1[idx2[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-              # inside[idx[i]]=inout(s1[idx[i],],vertices)
-              inside[idx2[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx2[i],],x)})))
+      #make sure all traps are inside a polygon
+      for(l in 1:t){
+        if(primary[l]==1){
+          for(j in 1:J[l]){
+            if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
+              stop(paste("Trap",j,"in year",l,"is not in the state space!"))
             }
           }
         }
       }
-    }else{#discrete SS
-      dSS=as.matrix(dSS)
-      #snap everyone back to closest place in state space
+      #initialize s1
+      s1<- cbind(runif(M,xlim[1],xlim[2]), runif(M,ylim[1],ylim[2])) #assign random locations
+      idx=which(known.vector==1) #switch for those actually caught
       for(i in idx){
-        dists=sqrt((s1[i,1]-dSS[,1])^2+(s1[i,2]-dSS[,2])^2)
-        s1[i,]=dSS[which(dists==min(dists))[1],]
+        trps=matrix(0,nrow=0,ncol=2)
+        for(l in 1:t){ #loop over t to get all cap locs
+          if(primary[l]==1){
+            trps<- rbind(trps,X[[l]][which(y[i,,l]>0),1:2])
+          }
+        }
+        trps=as.matrix(trps,ncol=2)
+        if(nrow(trps)>1){
+          s1[i,]<- trps[1,]
+        }else{
+          s1[i,]=trps
+        }
+        # s1[i,]<- c(mean(trps[,1]),mean(trps[,2]))
       }
-      #randomly assign uncaptured guys to cells
-      idx2=setdiff(1:M,idx)
-      s1[idx2,]=dSS[sample(1:nrow(dSS),length(idx2)),]
-    }
-    #Initialize s2
-    #Assign s2 to be s1 for all occasions
-    s2=array(NA,dim=c(M,t,2))
-    for(l in 1:t){
-      s2[,l,]=s1
-    }
-    if(ACtype%in%c("metamu","metamu2","markov")){
-      #update s2s for guys captured each year and add noise for uncaptured guys. More consistent with sigma_t>0
-      #should be OK for markov and independent
-      for(l in 1:t){
-        idx=which(rowSums(y[,,l])>0) #switch for those actually caught
-        for(i in 1:M){
-          if(i%in%idx){
-            trps<- X[[l]][which(y[i,,l]>0),1:2]
-            if(is.matrix(trps)){
-              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
-            }else{
-              s2[i,l,]=trps
-            }
-          }else{
-            inside=FALSE
-            while(inside==FALSE){
-              s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
-              # inside=inout(s2[i,l,],vertices)
-              inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
-            }
+      #check to make sure everyone is in polygon
+      inside=rep(NA,nrow(s1))
+      for(i in 1:nrow(s1)){
+        # inside[i]=inout(s1[i,],vertices)
+        inside[i]=any(unlist(lapply(vertices,function(x){inout(s1[i,],x)})))
+      }
+      idx2=which(inside==FALSE)
+      if(any(idx2%in%idx)){#shouldn't happen now
+        warning("Vertices too complicated for this AC initialization algorithm to provide good starting values.
+                Either hassle Ben to fix it or use a discrete state space")
+      }
+      if(length(idx2)>0){
+        for(i in 1:length(idx2)){
+          while(inside[idx2[i]]==FALSE){
+            s1[idx2[i],]=c(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+            # inside[idx[i]]=inout(s1[idx[i],],vertices)
+            inside[idx2[i]]=any(unlist(lapply(vertices,function(x){inout(s1[idx2[i],],x)})))
           }
         }
       }
-      if(ACtype%in%c("metamu","metamu2")){
-        ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t,log=TRUE))
-        ll.s2.cand=ll.s2
-      }else if(ACtype=="markov"){
-        ll.s2=matrix(NA,nrow=M,ncol=t-1)
-        for(l in 2:t){
-          ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t,log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t,log=TRUE))
-        }
-        ll.s2.cand=ll.s2
-      }
-    }
-    if(ACtype=="independent"){
-      #update s2s for guys captured each year and put uncaptured guys OFF the GRID so they can get turned on.
-      #general not as good alternative, make sure they're not within buff/2 of a trap
-      for(l in 1:t){
-        idx=which(rowSums(y[,,l])>0) #switch for those actually caught
-        for(i in 1:M){
-          if(i%in%idx){
-            trps<- X[[l]][which(y[i,,l]>0),1:2]
-            if(is.matrix(trps)){
-              s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
-            }else{
-              s2[i,l,]=trps
-            }
-          }else{
-            inside=FALSE
-            while(inside==FALSE){
-              s2[i,l,]=cbind(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
-              # dists=sqrt((s2[i,l,1]-X[[l]][,1])^2+(s2[i,l,2]-X[[l]][,2])^2)
-              # inside=inout(s2[i,l,],vertices)#&(!any(dists<buff/2))
+      #initialize s2
+      s2=array(NA,dim=c(M,t,2))
+      if(ACtype%in%c("metamu","metamu2","markov")){
+        #update s2s for guys captured each year and add noise for uncaptured guys. More consistent with sigma_t>0
+        for(l in 1:t){
+          idx=which(rowSums(y[,,l])>0) #switch for those actually caught
+          for(i in 1:M){
+            if(i%in%idx){
+              trps<- X[[l]][which(y[i,,l]>0),1:2]
+              if(!is.matrix(trps)){
+                trps=matrix(trps,ncol=2,nrow=1)
+              }
+              if(nrow(trps)>1){
+                s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+              }else{
+                s2[i,l,]=trps
+              }
               inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+              if(!inside){
+                if(nrow(trps)>1){
+                  s2[i,l,]<- trps[1,]
+                }else{
+                  s2[i,l,]=trps
+                }
+              }
 
+            }else{
+              if(ACtype%in%c("metamu","metamu2")){#this doesn't work well for markov with larger sigma
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
+              }
             }
           }
         }
-      }
-    }
-    if(usedSS){
-      #snap everyone back to closest place in state space
-      for(l in 1:t){
-        for(i in 1:M){
-          dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
-          s2[i,l,]=dSS[which(dists==min(dists))[1],]
+        if(ACtype=="markov"){#smarter starting values for markov mvmt
+          for(i in 1:M){
+            if(is.na(s2[i,1,1])){
+              s2[i,1,]=s1[i,]
+            }
+            for(l in 2:t){
+              if(is.na(s2[i,l,1])){
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,1]=rnorm(1,s2[i,l-1,1],sigma_t)
+                  s2[i,l,2]=rnorm(1,s2[i,l-1,2],sigma_t)
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
+              }
+            }
+          }
+        }
+        #calculate likelihoods
+        if(ACtype%in%c("metamu","metamu2")){
+          if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+            ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t,log=TRUE))
+          }else{
+            ll.s2=log(dnorm(s2[,,1],s1[,1],sigma_t)/
+                        (pnorm(xlim[2],s1[,1],sigma_t)-pnorm(xlim[1],s1[,1],sigma_t)))
+            ll.s2=ll.s2+log(dnorm(s2[,,2],s1[,2],sigma_t)/
+                              (pnorm(ylim[2],s1[,2],sigma_t)-pnorm(ylim[1],s1[,2],sigma_t)))
+          }
+          ll.s2.cand=ll.s2
+        }else if(ACtype%in%c("markov")){
+          ll.s2=matrix(NA,nrow=M,ncol=t-1)
+          for(l in 2:t){
+            if(!useverts){#truncate
+              ll.s2[,l-1]=log(dnorm(s2[,l,1],s2[,l-1,1],sigma_t)/
+                                (pnorm(xlim[2],s2[,l-1,1],sigma_t)-pnorm(xlim[1],s2[,l-1,1],sigma_t)))
+              ll.s2[,l-1]=ll.s2[,l-1]+log(dnorm(s2[,l,2],s2[,l-1,2],sigma_t)/
+                                            (pnorm(ylim[2],s2[,l-1,2],sigma_t)-pnorm(ylim[1],s2[,l-1,2],sigma_t)))
+            }else{
+              ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t,log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t,log=TRUE))
+            }
+          }
+          ll.s2.cand=ll.s2
+        }
+      }else if(ACtype=="independent"){
+        for(l in 1:t){
+          s2[,l,]=s1
+          idx=which(rowSums(y[,,l])>0) #switch for those actually caught
+          for(i in 1:M){
+            if(i%in%idx){
+              trps<- X[[l]][which(y[i,,l]>0),1:2]
+              if(!is.matrix(trps)){
+                trps=matrix(trps,ncol=2,nrow=1)
+              }
+              if(nrow(trps)>1){
+                s2[i,l,]<- c(mean(trps[,1]),mean(trps[,2]))
+              }else{
+                s2[i,l,]=trps
+              }
+            }else{
+              inside=FALSE
+              while(inside==FALSE){
+                s2[i,l,]=cbind(runif(1,xlim[1],xlim[2]), runif(1,ylim[1],ylim[2]))
+                inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+              }
+            }
+          }
+        }
+      }else{#fixed
+        for(l in 1:t){
+          s2[,l,]=s1
         }
       }
-    }
+      }else{#use dSS
+        #not optimal but should work ok for all options
+        s1=dSS[sample(1:NdSS,M,replace=TRUE),1:2] #initial locations
+        #update if caught at all
+        idx=which(rowSums(y)>0) #switch for those actually caught to first trap
+        for(i in 1:M){
+          if(i%in%idx){
+            trps=matrix(0,nrow=0,ncol=2)
+            for(l in 1:t){ #loop over t to get all cap locs
+              if(primary[l]==1){
+                trps<- rbind(trps,X[[l]][which(y[i,,l]>0),1:2])
+              }
+            }
+            if(!is.matrix(trps)){
+              trps=matrix(trps,ncol=2,nrow=1)
+            }
+            if(nrow(trps)>1){#nearest trap
+              dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
+            }else{
+              dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
+            }
+            s1[i,]=dSS[which(dist==min(dist))[1],1:2]
+          }
+        }
+        #record s1 dSS
+        s1.cell=rep(NA,M)
+        for(i in 1:M){
+          s1.cell[i]=which(dSS[,1]==s1[i,1]&dSS[,2]==s1[i,2])
+        }
+        #update s2 in each year if caught in that year
+        s2=array(NA,dim=c(M,t,2))
+        s2.cell=matrix(NA,nrow=M,ncol=t)
+        if(ACtype%in%c("independent","metamu","metamu2","markov","markov2")){
+          for(l in 1:t){
+            # s2[,l,]=s1
+            if(primary[l]==1){
+              idx=which(rowSums(y[,,l])>0)
+              for(i in 1:M){
+                if(i%in%idx){
+                  trps<- X[[l]][which(y[i,,l]>0),1:2]
+                  if(!is.matrix(trps)){
+                    trps=matrix(trps,ncol=2,nrow=1)
+                  }
+                  if(nrow(trps)>1){
+                    dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
+                  }else{
+                    dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
+                  }
+                  s2[i,l,]=dSS[which(dist==min(dist))[1],1:2]
+                }
+              }
+            }
+          }
+        }
+        #Get smart values for ids/years not captured and calculate movement likelihoods
+        if(ACtype%in%c("metamu","metamu2")){
+          for(l in 1:t){
+            for(i in 1:M){
+              if(is.na(s2[i,l,1])){
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
+              }
+            }
+          }
+          if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+            ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t,log=TRUE))
+          }else{
+            ll.s2=log(dnorm(s2[,,1],s1[,1],sigma_t)/
+                        (pnorm(xlim[2],s1[,1],sigma_t)-pnorm(xlim[1],s1[,1],sigma_t)))
+            ll.s2=ll.s2+log(dnorm(s2[,,2],s1[,2],sigma_t)/
+                              (pnorm(ylim[2],s1[,2],sigma_t)-pnorm(ylim[1],s1[,2],sigma_t)))
+          }
+          ll.s2.cand=ll.s2
+        }else if(ACtype%in%c("markov")){
+          ll.s2=matrix(NA,nrow=M,ncol=t-1)
+          for(i in 1:M){
+            if(is.na(s2[i,1,1])){
+              s2[i,1,]=s1[i,]
+            }
+            for(l in 2:t){
+              if(is.na(s2[i,l,1])){
+                inside=FALSE
+                while(inside==FALSE){
+                  s2[i,l,1]=rnorm(1,s2[i,l-1,1],sigma_t)
+                  s2[i,l,2]=rnorm(1,s2[i,l-1,2],sigma_t)
+                  inside=any(unlist(lapply(vertices,function(x){inout(s2[i,l,],x)})))
+                }
+              }
+            }
+          }
+          for(l in 2:t){
+            if(!useverts){#truncate
+              ll.s2[,l-1]=log(dnorm(s2[,l,1],s2[,l-1,1],sigma_t)/
+                                (pnorm(xlim[2],s2[,l-1,1],sigma_t)-pnorm(xlim[1],s2[,l-1,1],sigma_t)))
+              ll.s2[,l-1]=ll.s2[,l-1]+log(dnorm(s2[,l,2],s2[,l-1,2],sigma_t)/
+                                            (pnorm(ylim[2],s2[,l-1,2],sigma_t)-pnorm(ylim[1],s2[,l-1,2],sigma_t)))
+            }else{
+              ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t,log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t,log=TRUE))
+            }
+          }
+          ll.s2.cand=ll.s2
+        }else if(ACtype%in%"markov2"){#get smarter s2 starts
+          ll.s2=matrix(NA,nrow=M,ncol=t-1)
+          for(i in 1:M){
+            if(is.na(s2[i,1,1])){
+              s2[i,1,]=s1[i,]
+            }
+            #snap
+            dists2=sqrt((s2[i,1,1]-dSS[,1])^2+(s2[i,1,2]-dSS[,2])^2)
+            #record cell
+            s2.cell[i,1]=which(dists2==min(dists2))
+          }
+          for(l in 2:t){
+            dists=e2dist(s2[,l-1,],dSS[,1:2])#cells each ind can choose
+            for(i in 1:M){
+              probs=dexp(dists[i,],1/sigma_t)
+              probs=probs/sum(probs)
+              if(is.na(s2[i,l,1])){#only move if not captured
+                s2.cell[i,l]=sample(1:NdSS,1,prob=probs)#overwrite above to be consistent with sigma_t
+                s2[i,l,]=dSS[s2.cell[i,l],1:2]
+              }else{
+                #snap
+                dists2=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+                #record cell
+                s2.cell[i,l]=which(dists2==min(dists2))
+                s2[i,l,]=dSS[s2.cell[i,l],1:2]
+              }
+              pick=rep(0,NdSS)
+              pick[s2.cell[i,l]]=1#you just picked this one
+              ll.s2[i,l-1]=dmultinom(pick,1,probs,log=TRUE)
+            }
+          }
+          ll.s2.cand=ll.s2
+
+        }else if(ACtype%in%c("fixed")){
+          for(l in 1:t){
+            s2[,l,]=s1
+          }
+        }else if(ACtype%in%c("independent")){
+          cap=1*(!is.na(s2[,1,1]))
+          for(i in 1:n){
+            for(l in 1:t){
+              if(is.na(s2[i,l,1])&cap[i]==1){
+                s2[i,l,]=s2[i,l-1,]
+              }else if(is.na(s2[i,l,1])&cap[i]==0){
+                s2[i,l,]=s2[i,which(!is.na(s2[i,,1]))[1],]
+                cap[i]=1
+              }
+            }
+          }
+          for(i in (n+1):M){
+            for(l in 1:t){
+              s2[i,l,]=s1[i,]
+            }
+          }
+        }
+        if(ACtype%in%c("fixed","independent","metamu","metamu2","markov")){
+          #record s2 cells
+          for(l in 1:t){
+            for(i in 1:M){
+              #snap
+              dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+              #record cell
+              s2.cell[i,l]=which(dists==min(dists))
+              s2[i,l,]=dSS[s2.cell[i,l],1:2]
+            }
+          }
+        }
+        ##precalculate distance matrix
+        distances=matrix(NA,nrow=NdSS,ncol=NdSS)
+        for(i in 1:NdSS){
+          distances[i,]=sqrt((dSS[i,1]-dSS[,1])^2+(dSS[i,2]-dSS[,2])^2)
+        }
+      }
     # some objects to hold the MCMC simulation output
     if(niter<(nburn)){
       stop("niter is smaller than nburn")
@@ -383,48 +640,54 @@ SCRmcmcOpen <-
     }
     Nnames=paste("N",1:t,sep="")
     if(ACtype%in%c("metamu","metamu2","markov")){
-      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t+1)
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"sigma_t")
+      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t+2)
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"sigma_t","psi")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
       s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
     }else if(ACtype=="independent"){
-      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t)
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames)
+      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t+1)
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"psi")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
       s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
     }else{
-      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t)
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames)
+      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t+1)
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"psi")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
     }
     idx=1 #for storing output not recorded every iteration
 
-    D=lamd=ll.y=ll.y.cand=array(NA,dim=c(M,maxJ,t))
+    D=lamd=ll.y=ll.y.cand=array(0,dim=c(M,maxJ,t))
     D[is.na(D)]=Inf  #hack to allow years with different J and K to fit in one array
     for(l in 1:t){
-      D[,1:J[l],l]=e2dist(s2[,l,],X[[l]])
-      if(length(lam0)==t&length(sigma)==t){
-        lamd[,1:J[l],l]=lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
-      }else if(length(lam0)==1&length(sigma)==t){
-        lamd[,1:J[l],l]=lam0*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
-      }else if(length(lam0)==t&length(sigma)==1){
-        lamd[,1:J[l],l]=lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
-      }else{
-        lamd[,1:J[l],l]=lam0*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
+      if(primary[l]==1){
+        D[,1:J[l],l]=e2dist(s2[,l,],X[[l]])
+        if(length(lam0)==t&length(sigma)==t){
+          lamd[,1:J[l],l]=lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
+        }else if(length(lam0)==1&length(sigma)==t){
+          lamd[,1:J[l],l]=lam0*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
+        }else if(length(lam0)==t&length(sigma)==1){
+          lamd[,1:J[l],l]=lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
+        }else{
+          lamd[,1:J[l],l]=lam0*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
+        }
       }
     }
     #Calculate ll for observation model
     if(obstype=="bernoulli"){
       pd=pd.cand=1-exp(-lamd)
       for(l in 1:t){
-        ll.y[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd[,1:J[l],l]*z[,l],log=TRUE)
+        if(primary[l]==1){
+          ll.y[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd[,1:J[l],l]*z[,l],log=TRUE)
+        }
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
-        ll.y[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd[,1:J[l],l]*z[,l],log=TRUE)
+        if(primary[l]==1){
+          ll.y[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd[,1:J[l],l]*z[,l],log=TRUE)
+        }
       }
     }else{
       stop("obstype must be 'bernoulli' or 'poisson'")
@@ -480,34 +743,39 @@ SCRmcmcOpen <-
       }
     }
 
+#################################################################################
     for(iter in 1:niter){
       ll.y.t.sum=apply(ll.y,3,sum) #only needed for detection parameters, changes in z and AC updates
       ll.y.sum=sum(ll.y.t.sum)
       # Update lam0
       if(length(lam0)==t){ #if lam0 is year-specific
         for(l in 1:t){
-          lam0.cand<- rnorm(1,lam0[l],proppars$lam0[l])
-          if(lam0.cand > 0){
-            if(length(sigma)==t){#if sigma is year specific
-              lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
-            }else{#fixed sigma
-              lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
-            }
-            if(obstype=="bernoulli"){
-              pd.cand[,1:J[l],l]=1-exp(-lamd.cand[,1:J[l],l])
-              ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
-            }else{
-              ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
-            }
-            ll.y.cand.t.sum[l]=sum(ll.y.cand[,1:J[l],l])#just 1 year
-            if(runif(1) < exp(ll.y.cand.t.sum[l] -ll.y.t.sum[l])){
-              lam0[l]<- lam0.cand
-              lamd[,1:J[l],l]=lamd.cand[,1:J[l],l]
-              if(obstype=="bernoulli"){
-                pd[,1:J[l],l]=pd.cand[,1:J[l],l]
+          if(primary[l]==1){
+            lam0.cand<- rnorm(1,lam0[l],proppars$lam0[l])
+            if(lam0.cand > 0){
+              if(length(sigma)==t){#if sigma is year specific
+                lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
+              }else{#fixed sigma
+                lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
               }
-              ll.y[,1:J[l],l]=ll.y.cand[,1:J[l],l]
-              ll.y.t.sum[l]=ll.y.cand.t.sum[l]
+              if(obstype=="bernoulli"){
+                pd.cand[,1:J[l],l]=1-exp(-lamd.cand[,1:J[l],l])
+                ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
+              }else{
+                ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              }
+              ll.y.cand.t.sum[l]=sum(ll.y.cand[,1:J[l],l])#just 1 year
+              if(runif(1) < exp(ll.y.cand.t.sum[l] -ll.y.t.sum[l])){
+                if(primary[l]==1){
+                  lam0[l]<- lam0.cand
+                  lamd[,1:J[l],l]=lamd.cand[,1:J[l],l]
+                  if(obstype=="bernoulli"){
+                    pd[,1:J[l],l]=pd.cand[,1:J[l],l]
+                  }
+                  ll.y[,1:J[l],l]=ll.y.cand[,1:J[l],l]
+                  ll.y.t.sum[l]=ll.y.cand.t.sum[l]
+                }
+              }
             }
           }
         }
@@ -517,11 +785,15 @@ SCRmcmcOpen <-
         if(lam0.cand > 0){
           if(length(sigma)==t){#if sigma is year specific
             for(l in 1:t){
-              lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
+              if(primary[l]==1){
+                lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma[l]*sigma[l]))
+              }
             }
           }else{#fixed sigma
             for(l in 1:t){
-              lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
+              if(primary[l]==1){
+                lamd.cand[,1:J[l],l]<- lam0.cand*exp(-D[,1:J[l],l]^2/(2*sigma*sigma))
+              }
             }
           }
           if(obstype=="bernoulli"){
@@ -531,7 +803,9 @@ SCRmcmcOpen <-
             }
           }else{
             for(l in 1:t){
-              ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              if(primary[l]==1){
+                ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              }
             }
           }
           ll.y.cand.t.sum=apply(ll.y.cand,3,sum)
@@ -551,28 +825,30 @@ SCRmcmcOpen <-
       #Update sigma
       if(length(sigma)==t){ #if sigma is year-specific
         for(l in 1:t){
-          sigma.cand<- rnorm(1,sigma[l],proppars$sigma[l])
-          if(sigma.cand > 0){
-            if(length(lam0)==t){#if lam0 is year specific
-              lamd.cand[,1:J[l],l]<- lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
-            }else{#fixed lam0
-              lamd.cand[,1:J[l],l]<- lam0*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
-            }
-            if(obstype=="bernoulli"){
-              pd.cand[,1:J[l],l]=1-exp(-lamd.cand[,1:J[l],l])
-              ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
-            }else{
-              ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
-            }
-            ll.y.cand.t.sum[l]=sum(ll.y.cand[,1:J[l],l])#just 1 year
-            if(runif(1) < exp(ll.y.cand.t.sum[l] -ll.y.t.sum[l])){
-              sigma[l]<- sigma.cand
-              lamd[,1:J[l],l]=lamd.cand[,1:J[l],l]
-              if(obstype=="bernoulli"){
-                pd[,1:J[l],l]=pd.cand[,1:J[l],l]
+          if(primary[l]==1){
+            sigma.cand<- rnorm(1,sigma[l],proppars$sigma[l])
+            if(sigma.cand > 0){
+              if(length(lam0)==t){#if lam0 is year specific
+                lamd.cand[,1:J[l],l]<- lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
+              }else{#fixed lam0
+                lamd.cand[,1:J[l],l]<- lam0*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
               }
-              ll.y[,1:J[l],l]=ll.y.cand[,1:J[l],l]
-              ll.y.t.sum[l]=ll.y.cand.t.sum[l]
+              if(obstype=="bernoulli"){
+                pd.cand[,1:J[l],l]=1-exp(-lamd.cand[,1:J[l],l])
+                ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
+              }else{
+                ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE) #only need to update this year
+              }
+              ll.y.cand.t.sum[l]=sum(ll.y.cand[,1:J[l],l])#just 1 year
+              if(runif(1) < exp(ll.y.cand.t.sum[l] -ll.y.t.sum[l])){
+                sigma[l]<- sigma.cand
+                lamd[,1:J[l],l]=lamd.cand[,1:J[l],l]
+                if(obstype=="bernoulli"){
+                  pd[,1:J[l],l]=pd.cand[,1:J[l],l]
+                }
+                ll.y[,1:J[l],l]=ll.y.cand[,1:J[l],l]
+                ll.y.t.sum[l]=ll.y.cand.t.sum[l]
+              }
             }
           }
         }
@@ -582,20 +858,28 @@ SCRmcmcOpen <-
         if(sigma.cand > 0){
           if(length(lam0)==t){#if lam0 is year specific
             for(l in 1:t){
-              lamd.cand[,1:J[l],l]<- lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
+              if(primary[l]==1){
+                lamd.cand[,1:J[l],l]<- lam0[l]*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
+              }
             }
           }else{#fixed lam0
             for(l in 1:t){
-              lamd.cand[,1:J[l],l]<- lam0*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
+              if(primary[l]==1){
+                lamd.cand[,1:J[l],l]<- lam0*exp(-D[,1:J[l],l]^2/(2*sigma.cand*sigma.cand))
+              }
             }          }
           if(obstype=="bernoulli"){
             pd.cand=1-exp(-lamd.cand)
             for(l in 1:t){
-              ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              if(primary[l]==1){
+                ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              }
             }
           }else{
             for(l in 1:t){
-              ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              if(primary[l]==1){
+                ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              }
             }
           }
           ll.y.cand.t.sum=apply(ll.y.cand,3,sum)
@@ -746,10 +1030,12 @@ SCRmcmcOpen <-
             #Normal stuff
             zt.cand[i]=1-z[i,l]
             at.cand=1*(a[,l-1]==1&zt.cand==0) #who was available on last occasion and not proposed to be captured?
-            if(obstype=="bernoulli"){
-              ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,],pd[i,1:J[l],l]*zt.cand[i],log=TRUE)
-            }else{
-              ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd[i,1:J[l],l]*zt.cand[i],log=TRUE)
+            if(primary[l]==1){
+              if(obstype=="bernoulli"){
+                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,],pd[i,1:J[l],l]*zt.cand[i],log=TRUE)
+              }else{
+                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd[i,1:J[l],l]*zt.cand[i],log=TRUE)
+              }
             }
             # ll.z.cand[,l] <- dbinom(zt.cand, 1, Ez[,l-1], log=TRUE) ## Don't subset z
             ll.z.cand[i,l] <- dbinom(zt.cand[i], 1, Ez[i,l-1], log=TRUE) ## why not?
@@ -804,7 +1090,9 @@ SCRmcmcOpen <-
               }
             }
             if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l]) + prior.z.cand) - (sum(ll.y[i,1:J[l],l]) +prior.z) )) {
-              ll.y[i,1:J[l],l] <- ll.y.cand[i,1:J[l],l]
+              if(primary[l]==1){
+                ll.y[i,1:J[l],l] <- ll.y.cand[i,1:J[l],l]
+              }
               ll.z[i,l] <- ll.z.cand[i,l]
               if((fix1|fix2)&(t>3)&(l<t)){
                 z=z.cand
@@ -867,13 +1155,13 @@ SCRmcmcOpen <-
             ll.z.cand[,l]=dbinom(z.cand[,l], 1, Ez.cand[,l-1], log=TRUE)
           }
           #update ll.y
-          if(obstype=="bernoulli"){
-            for(l in 1:t){
-              ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,],pd[i,1:J[l],l]*z.cand[i,l],log=TRUE)
-            }
-          }else{
-            for(l in 1:t){
-              ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd[i,1:J[l],l]*z.cand[i,l],log=TRUE)
+          for(l in 1:t){
+            if(primary[l]==1){
+              if(obstype=="bernoulli"){
+                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,],pd[i,1:J[l],l]*z.cand[i,l],log=TRUE)
+              }else{
+                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd[i,1:J[l],l]*z.cand[i,l],log=TRUE)
+              }
             }
           }
 
@@ -886,7 +1174,7 @@ SCRmcmcOpen <-
             Ez=Ez.cand
             ll.z[i,1]=ll.z.cand[i,1]
             ll.z[,2:t]=ll.z.cand[,2:t]
-            ll.y[i,1:J[l],]=ll.y.cand[i,1:J[l],]
+            ll.y[i,,]=ll.y.cand[i,,]
             #Update likelihood for all possible z histories
             for(l in 2:t){
               Ezpossible[,l-1]=zpossible[,l-1]*phiuse[l-1] + apossible[,l-1]*gamma.prime[l-1]
@@ -1002,27 +1290,38 @@ SCRmcmcOpen <-
               inbox=TRUE
             }
             if(inbox){
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==t&length(sigma)==1){
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else{
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==t&length(sigma)==1){
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else{
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
+                  ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }
               }
-              if(obstype=="bernoulli"){
-                pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
-                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+              if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+                ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t,log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t,log=TRUE)
+              }else{#truncate
+                ll.s2.cand[i,l]= log(dnorm(Scand[1],s1[i,1],sigma_t)/
+                  (pnorm(xlim[2],s1[i,1],sigma_t)-pnorm(xlim[1],s1[i,1],sigma_t)))
+                ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(Scand[2],s1[i,2],sigma_t)/
+                  (pnorm(ylim[2],s1[i,2],sigma_t)-pnorm(ylim[1],s1[i,2],sigma_t)))
               }
-              ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t,log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t,log=TRUE)
               if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+ll.s2.cand[i,l]) -(sum(ll.y[i,1:J[l],l])+ll.s2[i,l]))){
                 s2[i,l,] <- Scand
-                D[i,1:nrow(X[[l]]),l] <- dtmp
-                lamd[i,1:J[l],l] <- lamd.cand[i,1:J[l],l]
-                if(obstype=="bernoulli"){
-                  pd[i,1:J[l],l]=pd.cand[i,1:J[l],l]
+                if(primary[l]==1){
+                  D[i,1:nrow(X[[l]]),l] <- dtmp
+                  lamd[i,1:J[l],l] <- lamd.cand[i,1:J[l],l]
+                  if(obstype=="bernoulli"){
+                    pd[i,1:J[l],l]=pd.cand[i,1:J[l],l]
+                  }
                 }
                 ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
                 ll.s2[i,l]=ll.s2.cand[i,l]
@@ -1040,12 +1339,17 @@ SCRmcmcOpen <-
           if(useverts==FALSE){
             inbox <- Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
           }else{
-            # inbox=inout(Scand,vertices)
             inbox=any(unlist(lapply(vertices,function(x){inout(Scand,x)})))
           }
           if(inbox){
-            #Count z==0 guys
-            ll.s2.cand[i,]<-dnorm(s2[i,,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t,log=TRUE)
+            if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+              ll.s2.cand[i,]=dnorm(s2[i,,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t,log=TRUE)
+            }else{#truncate
+              ll.s2.cand[i,]=log(dnorm(s2[i,,1],Scand[1],sigma_t)/
+                               (pnorm(xlim[2],Scand[1],sigma_t)-pnorm(xlim[1],Scand[1],sigma_t)))
+              ll.s2.cand[i,]=ll.s2.cand[i,]+log(dnorm(s2[i,,2],Scand[2],sigma_t)/
+                            (pnorm(ylim[2],Scand[2],sigma_t)-pnorm(ylim[1],Scand[2],sigma_t)))
+            }
             if (runif(1) < exp(sum(ll.s2.cand[i,]) - sum(ll.s2[i,]))) {
               s1[i, ]=Scand
               ll.s2[i,]=ll.s2.cand[i,]
@@ -1055,7 +1359,14 @@ SCRmcmcOpen <-
         #Update sigma_t
         sigma_t.cand <- rnorm(1,sigma_t,proppars$sigma_t)
         if(sigma_t.cand > 0){
-          ll.s2.cand=dnorm(s2[,,1],s1[,1],sigma_t.cand,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t.cand,log=TRUE)
+          if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+            ll.s2.cand=dnorm(s2[,,1],s1[,1],sigma_t.cand,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t.cand,log=TRUE)
+          }else{
+            ll.s2.cand=log(dnorm(s2[,,1],s1[,1],sigma_t.cand)/
+                                   (pnorm(xlim[2],s1[,1],sigma_t.cand)-pnorm(xlim[1],s1[,1],sigma_t.cand)))
+            ll.s2.cand=ll.s2.cand+log(dnorm(s2[,,2],s1[,2],sigma_t.cand)/
+                                  (pnorm(ylim[2],s1[,2],sigma_t.cand)-pnorm(ylim[1],s1[,2],sigma_t.cand)))
+          }
           if (runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))) {
             sigma_t=sigma_t.cand
             ll.s2=ll.s2.cand
@@ -1077,46 +1388,38 @@ SCRmcmcOpen <-
           if (inbox) {
             dtmp=matrix(Inf,maxJ,t)
             for(l in 1:t){
-              dtmp[1:J[l],l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-            }
-            if(length(lam0)==1&length(sigma==1)){
-              for(l in 1:t){
-                lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
-              }
-            }else if(length(lam0)==t&length(sigma)==1){
-              for(l in 1:t){
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
-              }
-            }else{
-              for(l in 1:t){
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[l]*sigma[l]))
-              }
-            }
-            if(obstype=="bernoulli"){
-              pd.cand[i,1:J[l],]=1-exp(-lamd.cand[i,1:J[l],])
-            }
-            ll.y.cand[i,1:J[l],l]=ll.y[i,1:J[l],l]
-            for(l in 1:t) {
-              if(z[i,l]==0)
-                next
-              if(obstype=="bernoulli"){
-                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp[1:J[l],l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                }else if(length(lam0)==t&length(sigma)==1){
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                }else{
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[l]*sigma[l]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,1:J[l],]=1-exp(-lamd.cand[i,1:J[l],])
+                  ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }
               }
             }
-            if(runif(1) < exp(sum(ll.y.cand[i,1:J[l],]) -sum(ll.y[i,1:J[l],]))){
+            if(runif(1) < exp(sum(ll.y.cand[i,,]) -sum(ll.y[i,,]))){
               s1[i, ] <- Scand
-              D[i,1:J[l], ] <- dtmp
-              lamd[i,1:J[l], ] <- lamd.cand[i,1:J[l],]
-              if(obstype=="bernoulli"){
-                pd[i,1:J[l],]=pd.cand[i,1:J[l],]
+              for(l in 1:t){
+                if(primary[l]==1){
+                  D[i,1:J[l], ] <- dtmp
+                  lamd[i,1:J[l], ] <- lamd.cand[i,1:J[l],]
+                  if(obstype=="bernoulli"){
+                    pd[i,1:J[l],]=pd.cand[i,1:J[l],]
+                  }
+                  ll.y[i,1:J[l],]=ll.y.cand[i,1:J[l],]
+                }
               }
-              ll.y[i,1:J[l],]=ll.y.cand[i,1:J[l],]
             }
           }
         }
-
       }else if(ACtype=="markov"){#Markov ACs
         for (i in 1:M){
           for(l in 1:t){
@@ -1128,45 +1431,77 @@ SCRmcmcOpen <-
             if(useverts==FALSE){
               inbox=Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
             }else{
-              # inbox=inout(Scand,vertices)
               inbox=any(unlist(lapply(vertices,function(x){inout(Scand,x)})))
             }
-            if(inbox) {
-              dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==t&length(sigma)==1){
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else{
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
-                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+            if(inbox){
+              if(primary[l]==1){
+                dtmp=sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==t&length(sigma)==1){
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else{
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
+                  ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }
               }
               ll.s2.cand[i,]=ll.s2[i,]
-              if(l==1){#only ll.s2[i,1] matters
-                #time 1 to 2
-                ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t,log=TRUE)
-              }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
-                #time l-1 to time l
-                ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t,log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t,log=TRUE)
-                #time l to l+1
-                ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t,log=TRUE)
-              }else{#only ll.s2[i,t-1] matters
-                #time t-1 to t
-                ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t,log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t,log=TRUE)
+              if(!useverts){#truncated normal
+                if(l==1){#only ll.s2[i,1] matters
+                  #time 1 to 2
+                  ll.s2.cand[i,1]=log(dnorm(s2[i,2,1],Scand[1],sigma_t)/(pnorm(xlim[2],Scand[1],sigma_t)-
+                                  pnorm(xlim[1],Scand[1],sigma_t)))
+                  ll.s2.cand[i,1]=ll.s2.cand[i,1]+log(dnorm(s2[i,2,2],Scand[2],sigma_t)/
+                                  (pnorm(ylim[2],Scand[2],sigma_t)-pnorm(ylim[1],Scand[2],sigma_t)))
+                }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                  #time l-1 to time l
+                  ll.s2.cand[i,l-1]=log(dnorm(Scand[1],s2[i,l-1,1],sigma_t)/(pnorm(xlim[2],s2[i,l-1,1],sigma_t)-
+                                    pnorm(xlim[1],s2[i,l-1,1],sigma_t)))
+                  ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(Scand[2],s2[i,l-1,2],sigma_t)/
+                                    (pnorm(ylim[2],s2[i,l-1,2],sigma_t)-pnorm(ylim[1],s2[i,l-1,2],sigma_t)))
+
+                  #time l to l+1
+                  ll.s2.cand[i,l]=log(dnorm(s2[i,l+1,1],Scand[1],sigma_t)/(pnorm(xlim[2],Scand[1],sigma_t)-
+                                                    pnorm(xlim[1],Scand[1],sigma_t)))
+                  ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(s2[i,l+1,2],Scand[2],sigma_t)/
+                                 (pnorm(ylim[2],Scand[2],sigma_t)-pnorm(ylim[1],Scand[2],sigma_t)))
+
+                }else{#only ll.s2[i,t-1] matters
+                  #time t-1 to t
+                  ll.s2.cand[i,t-1]=log(dnorm(Scand[1],s2[i,t-1,1],sigma_t)/(pnorm(xlim[2],s2[i,t-1,1],sigma_t)-
+                                                     pnorm(xlim[1],s2[i,t-1,1],sigma_t)))
+                  ll.s2.cand[i,t-1]=ll.s2.cand[i,t-1]+log(dnorm(Scand[2],s2[i,t-1,2],sigma_t)/
+                            (pnorm(ylim[2],s2[i,t-1,2],sigma_t)-pnorm(ylim[1],s2[i,t-1,2],sigma_t)))
+                }
+              }else{
+                if(l==1){#only ll.s2[i,1] matters
+                  #time 1 to 2
+                  ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t,log=TRUE)
+                }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                  #time l-1 to time l
+                  ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t,log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t,log=TRUE)
+                  #time l to l+1
+                  ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t,log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t,log=TRUE)
+                }else{#only ll.s2[i,t-1] matters
+                  #time t-1 to t
+                  ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t,log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t,log=TRUE)
+                }
               }
               if(runif(1) < exp((sum(ll.y.cand[i,1:J[l],l])+sum(ll.s2.cand[i,])) -(sum(ll.y[i,1:J[l],l])+sum(ll.s2[i,])))){
                 s2[i,l,] <- Scand
-                D[i,1:nrow(X[[l]]),l] <- dtmp
-                lamd[i,,l] <- lamd.cand[i,,l]
-                if(obstype=="bernoulli"){
-                  pd[i,,l]=pd.cand[i,,l]
+                if(primary[l]==1){
+                  D[i,1:nrow(X[[l]]),l] <- dtmp
+                  lamd[i,,l] <- lamd.cand[i,,l]
+                  if(obstype=="bernoulli"){
+                    pd[i,,l]=pd.cand[i,,l]
+                  }
+                  ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
                 }
-                ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
                 ll.s2[i,]=ll.s2.cand[i,]
               }
             }
@@ -1177,7 +1512,14 @@ SCRmcmcOpen <-
         if(sigma_t.cand > 0){
           for(l in 2:t){
             for(i in 1:M){
-              ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+              if(!useverts){#truncate
+                ll.s2.cand[i,l-1]=log(dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand)/(pnorm(xlim[2],s2[i,l-1,1],sigma_t.cand)-
+                                                                           pnorm(xlim[1],s2[i,l-1,1],sigma_t.cand)))
+                ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand)/
+                                                      (pnorm(ylim[2],s2[i,l-1,2],sigma_t.cand)-pnorm(ylim[1],s2[i,l-1,2],sigma_t.cand)))
+              }else{
+                ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+              }
             }
           }
           if (runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))) {
@@ -1185,7 +1527,6 @@ SCRmcmcOpen <-
             ll.s2=ll.s2.cand
           }
         }
-
       }else{#independent ACS
         for(l in 1:t){
           for (i in 1:M) {
@@ -1202,28 +1543,32 @@ SCRmcmcOpen <-
               inbox=any(unlist(lapply(vertices,function(x){inout(Scand,x)})))
             }
             if (inbox) {
-              dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
-              if(length(lam0)==1&length(sigma==1)){
-                lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else if(length(lam0)==t&length(sigma)==1){
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
-              }else{
-                lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
-              }
-              if(obstype=="bernoulli"){
-                pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,,l])
-                ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
-              }else{
-                ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+              if(primary[l]==1){
+                dtmp<- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
+                if(length(lam0)==1&length(sigma==1)){
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else if(length(lam0)==t&length(sigma)==1){
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma*sigma))
+                }else{
+                  lamd.cand[i,1:J[l],l]<- lam0[l]*exp(-dtmp*dtmp/(2*sigma[l]*sigma[l]))
+                }
+                if(obstype=="bernoulli"){
+                  pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,,l])
+                  ll.y.cand[i,1:J[l],l] <- dbinom(y[i,1:J[l],l], tf[[l]][i,], pd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }else{
+                  ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
+                }
               }
               if(runif(1) < exp(sum(ll.y.cand[i,1:J[l],l]) -sum(ll.y[i,1:J[l],l]))){
                 s2[i,l, ] <- Scand
-                D[i,1:J[l],l] <- dtmp
-                lamd[i,1:J[l], l] <- lamd.cand[i,1:J[l],l]
-                if(obstype=="bernoulli"){
-                  pd[i,1:J[l],l]=pd.cand[i,1:J[l],l]
+                if(primary[l]==1){
+                  D[i,1:J[l],l] <- dtmp
+                  lamd[i,1:J[l], l] <- lamd.cand[i,1:J[l],l]
+                  if(obstype=="bernoulli"){
+                    pd[i,1:J[l],l]=pd.cand[i,1:J[l],l]
+                  }
+                  ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
                 }
-                ll.y[i,1:J[l],l]=ll.y.cand[i,1:J[l],l]
               }
             }
           }
@@ -1236,20 +1581,19 @@ SCRmcmcOpen <-
         s1yout[idx,]<- s1[,2]
         zout[idx,,]<- z
         if(ACtype%in%c("metamu","metamu2","markov")){
-          out[idx,]<- c(lam0,sigma ,gamma,phi,N,sigma_t)
+          out[idx,]<- c(lam0,sigma ,gamma,phi,N,sigma_t,psi)
           s2xout[idx,,]<- s2[,,1]
           s2yout[idx,,]<- s2[,,2]
         }else if (ACtype=="independent"){
-          out[idx,]<- c(lam0,sigma ,gamma,phi,N)
+          out[idx,]<- c(lam0,sigma ,gamma,phi,N,psi)
           s2xout[idx,,]<- s2[,,1]
           s2yout[idx,,]<- s2[,,2]
         }else{
-          out[idx,]<- c(lam0,sigma ,gamma,phi,N)
+          out[idx,]<- c(lam0,sigma ,gamma,phi,N,psi)
         }
         idx=idx+1
       }
     }  # end of MCMC algorithm
-
     if(keepACs==TRUE){
       if(ACtype%in%c("metamu2","metamu","markov","independent")){
         list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)

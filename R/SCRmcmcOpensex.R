@@ -74,8 +74,8 @@ SCRmcmcOpensex <-
       xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
       xlim=xylim[,1]+c(-buff,buff)
       ylim=xylim[,2]+c(-buff,buff)
-      vertices=list(rbind(c(xlim[1],ylim[1]-buff),c(xlim[1]-buff,ylim[2]),
-                          c(xlim[2],ylim[2]+buff),c(xlim[2]+buff,ylim[1])))
+      vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),
+                          c(xlim[2],ylim[2]),c(xlim[2],ylim[1]),c(xlim[1],ylim[1])))
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
@@ -86,17 +86,21 @@ SCRmcmcOpensex <-
         stop("If using a trap operation file, must input one for each year")
       }
       for(i in 1:length(X)){
-        if(is.matrix(tf[[l]])){
-          stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
-        }
-        if(nrow(X[[l]])!=length(tf[[l]])){
-          stop("If using trap operation file, must enter operation for every trap")
+        if(primary[l]==1){
+          if(is.matrix(tf[[l]])){
+            stop("If using trap operation file, must enter vector of number of occasions operational, not matrix of trap by occasion operation")
+          }
+          if(nrow(X[[l]])!=length(tf[[l]])){
+            stop("If using trap operation file, must enter operation for every trap")
+          }
         }
       }
     }else{
       tf=vector("list",t)
       for(l in 1:t){
-        tf[[l]]=rep(K[l],nrow(X[[l]]))
+        if(primary[l]==1){
+          tf[[l]]=rep(K[l],nrow(X[[l]]))
+        }
       }
     }
     #make tf into matrix
@@ -463,12 +467,26 @@ SCRmcmcOpensex <-
         }
         #calculate likelihoods
         if(ACtype%in%c("metamu","metamu2")){
-          ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
+          if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+            ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
+          }else{
+            ll.s2=log(dnorm(s2[,,1],s1[,1],sigma_t[sex])/
+                        (pnorm(xlim[2],s1[,1],sigma_t[sex])-pnorm(xlim[1],s1[,1],sigma_t[sex])))
+            ll.s2=ll.s2+log(dnorm(s2[,,2],s1[,2],sigma_t[sex])/
+                              (pnorm(ylim[2],s1[,2],sigma_t[sex])-pnorm(ylim[1],s1[,2],sigma_t[sex])))
+          }
           ll.s2.cand=ll.s2
         }else if(ACtype%in%c("markov")){
           ll.s2=matrix(NA,nrow=M,ncol=t-1)
           for(l in 2:t){
-            ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
+            if(!useverts){#truncate
+              ll.s2[,l-1]=log(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex])/
+                                (pnorm(xlim[2],s2[,l-1,1],sigma_t[sex])-pnorm(xlim[1],s2[,l-1,1],sigma_t[sex])))
+              ll.s2[,l-1]=ll.s2[,l-1]+log(dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex])/
+                                            (pnorm(ylim[2],s2[,l-1,2],sigma_t[sex])-pnorm(ylim[1],s2[,l-1,2],sigma_t[sex])))
+            }else{
+              ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
+            }
           }
           ll.s2.cand=ll.s2
         }
@@ -517,7 +535,7 @@ SCRmcmcOpensex <-
           if(!is.matrix(trps)){
             trps=matrix(trps,ncol=2,nrow=1)
           }
-          if(nrow(trps)>1){
+          if(nrow(trps)>1){#nearest trap
             dist=sqrt((trps[1,1]-dSS[,1])^2+(trps[1,2]-dSS[,2])^2)
           }else{
             dist=sqrt((trps[1]-dSS[,1])^2+(trps[2]-dSS[,2])^2)
@@ -568,7 +586,14 @@ SCRmcmcOpensex <-
             }
           }
         }
-        ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
+        if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+          ll.s2=(dnorm(s2[,,1],s1[,1],sigma_t[sex],log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t[sex],log=TRUE))
+        }else{
+          ll.s2=log(dnorm(s2[,,1],s1[,1],sigma_t[sex])/
+                      (pnorm(xlim[2],s1[,1],sigma_t[sex])-pnorm(xlim[1],s1[,1],sigma_t[sex])))
+          ll.s2=ll.s2+log(dnorm(s2[,,2],s1[,2],sigma_t[sex])/
+                            (pnorm(ylim[2],s1[,2],sigma_t[sex])-pnorm(ylim[1],s1[,2],sigma_t[sex])))
+        }
         ll.s2.cand=ll.s2
       }else if(ACtype%in%c("markov")){
         ll.s2=matrix(NA,nrow=M,ncol=t-1)
@@ -588,7 +613,14 @@ SCRmcmcOpensex <-
           }
         }
         for(l in 2:t){
-          ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
+          if(!useverts){#truncate
+            ll.s2[,l-1]=log(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex])/
+                              (pnorm(xlim[2],s2[,l-1,1],sigma_t[sex])-pnorm(xlim[1],s2[,l-1,1],sigma_t[sex])))
+            ll.s2[,l-1]=ll.s2[,l-1]+log(dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex])/
+                                          (pnorm(ylim[2],s2[,l-1,2],sigma_t[sex])-pnorm(ylim[1],s2[,l-1,2],sigma_t[sex])))
+          }else{
+            ll.s2[,l-1]=(dnorm(s2[,l,1],s2[,l-1,1],sigma_t[sex],log=TRUE)+dnorm(s2[,l,2],s2[,l-1,2],sigma_t[sex],log=TRUE))
+          }
         }
         ll.s2.cand=ll.s2
       }else if(ACtype%in%"markov2"){#get smarter s2 starts
@@ -623,9 +655,27 @@ SCRmcmcOpensex <-
           }
         }
         ll.s2.cand=ll.s2
-      }else if(ACtype%in%c("fixed","independent")){
+
+      }else if(ACtype%in%c("fixed")){
         for(l in 1:t){
           s2[,l,]=s1
+        }
+      }else if(ACtype%in%c("independent")){
+        cap=1*(!is.na(s2[,1,1]))
+        for(i in 1:n){
+          for(l in 1:t){
+            if(is.na(s2[i,l,1])&cap[i]==1){
+              s2[i,l,]=s2[i,l-1,]
+            }else if(is.na(s2[i,l,1])&cap[i]==0){
+              s2[i,l,]=s2[i,which(!is.na(s2[i,,1]))[1],]
+              cap[i]=1
+            }
+          }
+        }
+        for(i in (n+1):M){
+          for(l in 1:t){
+            s2[i,l,]=s1[i,]
+          }
         }
       }
       if(ACtype%in%c("fixed","independent","metamu","metamu2","markov")){
@@ -639,6 +689,11 @@ SCRmcmcOpensex <-
             s2[i,l,]=dSS[s2.cell[i,l],1:2]
           }
         }
+      }
+      ##precalculate distance matrix
+      distances=matrix(NA,nrow=NdSS,ncol=NdSS)
+      for(i in 1:NdSS){
+        distances[i,]=sqrt((dSS[i,1]-dSS[,1])^2+(dSS[i,2]-dSS[,2])^2)
       }
     }
 
@@ -675,24 +730,24 @@ SCRmcmcOpensex <-
     NFnames=paste("Nf",1:t,sep="")
     if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       if(sexparms$sigma_t=="fixed"){
-        out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2)
-        colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"sigma_t","psex")
+        out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2+1)
+        colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"sigma_t","psex","psi")
       }else{
-        out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+3)
-        colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"sigma_t_M","sigma_t_F","psex")
+        out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+3+1)
+        colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"sigma_t_M","sigma_t_F","psex","psi")
       }
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
       s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
     }else if(ACtype=="independent"){
-      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+1)
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex")
+      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2)
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex","psi")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
       s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
     }else{
-      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+1)
-      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex")
+      out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2)
+      colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex","psi")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
       zout<-array(NA,dim=c(nstore,M,t))
     }
@@ -1263,7 +1318,7 @@ SCRmcmcOpensex <-
       upsex=sample(which(known.sex==0),proppars$sex)
       for(i in upsex){
         sex.cand=sex
-        if(known.sex[i]==1)next
+        # if(known.sex[i]==1)next
         if(sex[i]==1){
           sex.cand[i]=2
         }else{
@@ -1309,14 +1364,28 @@ SCRmcmcOpensex <-
         }
         ll.sex.cand[i]=dbinom(sex.cand[i]-1,1,psex,log=TRUE)
         if(ACtype%in%c("metamu","metamu2")){
-          ll.s2.cand[i,]=(dnorm(s2[i,,1],s1[i,1],sigma_t[sex.cand[i]],log=TRUE)+dnorm(s2[i,,2],s1[i,2],sigma_t[sex.cand[i]],log=TRUE))
+          if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+            ll.s2.cand[i,]=(dnorm(s2[i,,1],s1[i,1],sigma_t[sex.cand[i]],log=TRUE)+dnorm(s2[i,,2],s1[i,2],sigma_t[sex.cand[i]],log=TRUE))
+          }else{
+            ll.s2.cand[i,]=log(dnorm(s2[i,,1],s1[i,1],sigma_t[sex.cand[i]])/
+                        (pnorm(xlim[2],s1[i,1],sigma_t[sex.cand[i]])-pnorm(xlim[1],s1[i,1],sigma_t[sex.cand[i]])))
+            ll.s2.cand[i,]=ll.s2.cand[i,]+log(dnorm(s2[i,,2],s1[i,2],sigma_t[sex.cand[i]])/
+                              (pnorm(ylim[2],s1[i,2],sigma_t[sex.cand[i]])-pnorm(ylim[1],s1[i,2],sigma_t[sex.cand[i]])))
+          }
         }else if(ACtype%in%c("markov")){
           for(l in 2:t){
-            ll.s2.cand[i,l-1]=(dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t[sex.cand[i]],log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t[sex.cand[i]],log=TRUE))
+            if(!useverts){#truncate
+              ll.s2.cand[i,l-1]=log(dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t[sex.cand[i]])/
+                                (pnorm(xlim[2],s2[i,l-1,1],sigma_t[sex.cand[i]])-pnorm(xlim[1],s2[i,l-1,1],sigma_t[sex.cand[i]])))
+              ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t[sex.cand[i]])/
+                                            (pnorm(ylim[2],s2[i,l-1,2],sigma_t[sex.cand[i]])-pnorm(ylim[1],s2[i,l-1,2],sigma_t[sex.cand[i]])))
+            }else{
+              ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t[sex.cand[i]],log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t[sex.cand[i]],log=TRUE)
+            }
           }
         }else if(ACtype=="markov2"){
           for(l in 2:t){
-            dists=sqrt((s2[i,l-1,1]-dSS[,1])^2+(s2[i,l-1,2]-dSS[,2])^2)
+            dists=distances[s2.cell[i,l-1],]
             probs=dexp(dists,1/sigma_t[sex.cand[i]])#cells you can pick
             probs=probs/sum(probs)
             pick=rep(0,NdSS)
@@ -1329,6 +1398,9 @@ SCRmcmcOpensex <-
             sex[i]=sex.cand[i]
             ll.sex[i]=ll.sex.cand[i]
             lamd[i,,]=lamd.cand[i,,]
+            if(obstype=="bernoulli"){
+              pd[i,,]=pd.cand[i,,]
+            }
             ll.y[i,,]=ll.y.cand[i,,]
             ll.z[,2:t]=ll.z.cand[,2:t]
             ll.s2[i,]=ll.s2.cand[i,]
@@ -1341,6 +1413,9 @@ SCRmcmcOpensex <-
             sex[i]=sex.cand[i]
             ll.sex[i]=ll.sex.cand[i]
             lamd[i,,]=lamd.cand[i,,]
+            if(obstype=="bernoulli"){
+              pd[i,,]=pd.cand[i,,]
+            }
             ll.y[i,,]=ll.y.cand[i,,]
             ll.z[,2:t]=ll.z.cand[,2:t]
             gamma.primeM=gamma.primeM.cand
@@ -1588,12 +1663,12 @@ SCRmcmcOpensex <-
           for(l in 1:t){
             if(usedSS){
               #dist based proposal
-              dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+              dists=distances[s2.cell[i,l],]
               prop.probs=exp(-dists*dists/(2*sigma[sex[i]]*sigma[sex[i]]))
               prop.probs=prop.probs/sum(prop.probs)
               s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
               Scand=dSS[s2.cell.cand,1:2]
-              dists2=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+              dists2=distances[s2.cell.cand,]
               back.probs=exp(-dists2*dists2/(2*sigma[sex[i]]*sigma[sex[i]]))
               back.probs=back.probs/sum(back.probs)
               inbox=TRUE
@@ -1629,7 +1704,14 @@ SCRmcmcOpensex <-
                   ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                 }
               }
-              ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
+              if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+                ll.s2.cand[i,l]=(dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE))
+              }else{
+                ll.s2.cand[i,l]=log(dnorm(Scand[1],s1[i,1],sigma_t[sex[i]])/
+                                     (pnorm(xlim[2],s1[i,1],sigma_t[sex[i]])-pnorm(xlim[1],s1[i,1],sigma_t[sex[i]])))
+                ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(Scand[2],s1[i,2],sigma_t[sex[i]])/
+                                                    (pnorm(ylim[2],s1[i,2],sigma_t[sex[i]])-pnorm(ylim[1],s1[i,2],sigma_t[sex[i]])))
+              }
               if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))*MHratio){
                 s2[i,l,] <- Scand
                 if(primary[l]==1){
@@ -1653,12 +1735,12 @@ SCRmcmcOpensex <-
           for(l in 1:t){
             if(usedSS){
               #dist based proposal
-              dists=sqrt((s2[i,l,1]-dSS[,1])^2+(s2[i,l,2]-dSS[,2])^2)
+              dists=distances[s2.cell[i,l],]
               prop.probs=exp(-dists*dists/(2*sigma[sex[i]]*sigma[sex[i]]))
               prop.probs=prop.probs/sum(prop.probs)
               s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
               Scand=dSS[s2.cell.cand,1:2]
-              dists2=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+              dists2=distances[s2.cell.cand,]
               back.probs=exp(-dists2*dists2/(2*sigma[sex[i]]*sigma[sex[i]]))
               back.probs=back.probs/sum(back.probs)
               inbox=TRUE
@@ -1693,22 +1775,49 @@ SCRmcmcOpensex <-
               }
               ll.s2.cand[i,]=ll.s2[i,]
               if(ACtype=="markov"){
-                if(l==1){#only ll.s2[i,1] matters
-                  #time 1 to 2
-                  ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]],log=TRUE)
-                }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
-                  #time l-1 to time l
-                  ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]],log=TRUE)
-                  #time l to l+1
-                  ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]],log=TRUE)
-                }else{#only ll.s2[i,t-1] matters
-                  #time t-1 to t
-                  ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]],log=TRUE)
+                if(!useverts){#truncate
+                  if(l==1){#only ll.s2[i,1] matters
+                    #time 1 to 2
+                    ll.s2.cand[i,1]=log(dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]])/(pnorm(xlim[2],Scand[1],sigma_t[sex[i]])-
+                                     pnorm(xlim[1],Scand[1],sigma_t[sex[i]])))
+                    ll.s2.cand[i,1]=ll.s2.cand[i,1]+log(dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]])/
+                                  (pnorm(ylim[2],Scand[2],sigma_t[sex[i]])-pnorm(ylim[1],Scand[2],sigma_t[sex[i]])))
+                  }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                    #time l-1 to time l
+                    ll.s2.cand[i,l-1]=log(dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]])/(pnorm(xlim[2],s2[i,l-1,1],sigma_t[sex[i]])-
+                                       pnorm(xlim[1],s2[i,l-1,1],sigma_t[sex[i]])))
+                    ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]])/
+                                  (pnorm(ylim[2],s2[i,l-1,2],sigma_t[sex[i]])-pnorm(ylim[1],s2[i,l-1,2],sigma_t[sex[i]])))
+                    #time l to l+1
+                    ll.s2.cand[i,l]=log(dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]])/(pnorm(xlim[2],Scand[1],sigma_t[sex[i]])-
+                                   pnorm(xlim[1],Scand[1],sigma_t[sex[i]])))
+                    ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]])/
+                                (pnorm(ylim[2],Scand[2],sigma_t[sex[i]])-pnorm(ylim[1],Scand[2],sigma_t[sex[i]])))
+                  }else{#only ll.s2[i,t-1] matters
+                    #time t-1 to t
+                    ll.s2.cand[i,t-1]=log(dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]])/(pnorm(xlim[2],s2[i,t-1,1],sigma_t[sex[i]])-
+                                      pnorm(xlim[1],s2[i,t-1,1],sigma_t[sex[i]])))
+                    ll.s2.cand[i,t-1]=ll.s2.cand[i,t-1]+log(dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]])/
+                                      (pnorm(ylim[2],s2[i,t-1,2],sigma_t[sex[i]])-pnorm(ylim[1],s2[i,t-1,2],sigma_t[sex[i]])))
+                  }
+                }else{
+                  if(l==1){#only ll.s2[i,1] matters
+                    #time 1 to 2
+                    ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]],log=TRUE)
+                  }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                    #time l-1 to time l
+                    ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]],log=TRUE)
+                    #time l to l+1
+                    ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]],log=TRUE)
+                  }else{#only ll.s2[i,t-1] matters
+                    #time t-1 to t
+                    ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]],log=TRUE)
+                  }
                 }
               }else{#markov 2
                 if(l==1){#only ll.s2[i,1] matters
                   #time 1 to 2
-                  dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+                  dists=distances[s2.cell.cand,]
                   probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                   probs=probs/sum(probs)
                   pick=rep(0,NdSS)
@@ -1716,14 +1825,14 @@ SCRmcmcOpensex <-
                   ll.s2.cand[i,1]=dmultinom(pick,1,probs,log=TRUE)
                 }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
                   #time l-1 to time l
-                  dists=sqrt((s2[i,l-1,1]-dSS[,1])^2+(s2[i,l-1,2]-dSS[,2])^2)
+                  dists=distances[s2.cell[i,l-1],]
                   probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                   probs=probs/sum(probs)
                   pick=rep(0,NdSS)
                   pick[s2.cell.cand]=1#propose to pick this one
                   ll.s2.cand[i,l-1]=dmultinom(pick,1,probs,log=TRUE)
                   #time l to l+1
-                  dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+                  dists=distances[s2.cell.cand,]
                   probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                   probs=probs/sum(probs)
                   pick=rep(0,NdSS)
@@ -1731,7 +1840,7 @@ SCRmcmcOpensex <-
                   ll.s2.cand[i,l]=dmultinom(pick,1,probs,log=TRUE)
                 }else{#only ll.s2[i,t-1] matters
                   #time t-1 to t
-                  dists=sqrt((s2[i,t-1,1]-dSS[,1])^2+(s2[i,t-1,2]-dSS[,2])^2)
+                  dists=distances[s2.cell[i,l-1],]
                   probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                   probs=probs/sum(probs)
                   pick=rep(0,NdSS)
@@ -1767,7 +1876,7 @@ SCRmcmcOpensex <-
               currpatch=dSS[s1.cell[i],3]
               idx2=which((dSS[,3]!=currpatch))
               dists=prop.probs=rep(0,NdSS)
-              dists[idx2]=sqrt((s1[i,1]-dSS[idx2,1])^2+(s1[i,2]-dSS[idx2,2])^2)
+              dists[idx2]=distances[s1.cell[i],idx2]
               prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
               prop.probs=prop.probs/sum(prop.probs)
               s1.cell.cand=sample(1:length(dists),1,prob=prop.probs)
@@ -1775,7 +1884,7 @@ SCRmcmcOpensex <-
               backpatch=dSS[s1.cell.cand,3]
               idx2=which((dSS[,3]!=backpatch))
               dists=back.probs=rep(0,NdSS)
-              dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
+              dists[idx2]=distances[s1.cell.cand,idx2]
               back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
               back.probs=back.probs/sum(back.probs)
               dtmp=matrix(Inf,maxJ,t)
@@ -1831,7 +1940,7 @@ SCRmcmcOpensex <-
                 currpatch=dSS[s2.cell[i,l],3]
                 idx2=which((dSS[,3]!=currpatch))
                 dists=prop.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((s2[i,l,1]-dSS[idx2,1])^2+(s2[i,l,2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell[i,l],idx2]
                 prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 prop.probs=prop.probs/sum(prop.probs)
                 s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
@@ -1839,7 +1948,7 @@ SCRmcmcOpensex <-
                 backpatch=dSS[s2.cell.cand,3]
                 idx2=which((dSS[,3]!=backpatch))
                 dists=back.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell.cand,idx2]
                 back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 back.probs=back.probs/sum(back.probs)
                 if(primary[l]==1){
@@ -1881,7 +1990,7 @@ SCRmcmcOpensex <-
                 currpatch=dSS[s2.cell[i,l],3]
                 idx2=which((dSS[,3]!=currpatch))
                 dists=prop.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((s2[i,l,1]-dSS[idx2,1])^2+(s2[i,l,2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell[i,l],idx2]
                 prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 prop.probs=prop.probs/sum(prop.probs)
                 s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
@@ -1889,7 +1998,7 @@ SCRmcmcOpensex <-
                 backpatch=dSS[s2.cell.cand,3]
                 idx2=which((dSS[,3]!=backpatch))
                 dists=back.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell.cand,idx2]
                 back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 back.probs=back.probs/sum(back.probs)
                 if(primary[l]==1){
@@ -1910,7 +2019,14 @@ SCRmcmcOpensex <-
                     ll.y.cand[i,1:J[l],l] <- dpois(y[i,1:J[l],l], tf[[l]][i,]*lamd.cand[i,1:J[l],l]*z[i,l], log=TRUE)
                   }
                 }
-                ll.s2.cand[i,l]<- dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE)
+                if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+                  ll.s2.cand[i,l]=(dnorm(Scand[1],s1[i,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s1[i,2],sigma_t[sex[i]],log=TRUE))
+                }else{
+                  ll.s2.cand[i,l]=log(dnorm(Scand[1],s1[i,1],sigma_t[sex[i]])/
+                                        (pnorm(xlim[2],s1[i,1],sigma_t[sex[i]])-pnorm(xlim[1],s1[i,1],sigma_t[sex[i]])))
+                  ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(Scand[2],s1[i,2],sigma_t[sex[i]])/
+                                                       (pnorm(ylim[2],s1[i,2],sigma_t[sex[i]])-pnorm(ylim[1],s1[i,2],sigma_t[sex[i]])))
+                }
                 if(runif(1) < exp((sum(ll.y.cand[i,,l])+ll.s2.cand[i,l]) -(sum(ll.y[i,,l])+ll.s2[i,l]))*(back.probs[s2.cell[i,l]]/prop.probs[s2.cell.cand])){
                   s2[i,l,] <- Scand
                   if(primary[l]==1){
@@ -1933,7 +2049,7 @@ SCRmcmcOpensex <-
                 currpatch=dSS[s2.cell[i,l],3]
                 idx2=which((dSS[,3]!=currpatch))
                 dists=prop.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((s2[i,l,1]-dSS[idx2,1])^2+(s2[i,l,2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell[i,l],idx2]
                 prop.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 prop.probs=prop.probs/sum(prop.probs)
                 s2.cell.cand=sample(1:length(dists),1,prob=prop.probs)
@@ -1943,7 +2059,7 @@ SCRmcmcOpensex <-
                 backpatch=dSS[s2.cell.cand,3]
                 idx2=which((dSS[,3]!=backpatch))
                 dists=back.probs=rep(0,NdSS)
-                dists[idx2]=sqrt((Scand[1]-dSS[idx2,1])^2+(Scand[2]-dSS[idx2,2])^2)
+                dists[idx2]=distances[s2.cell.cand,idx2]
                 back.probs[idx2]=exp(-dists[idx2]*dists[idx2]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 back.probs=back.probs/sum(back.probs)
                 if(primary[l]==1){
@@ -1967,22 +2083,49 @@ SCRmcmcOpensex <-
                 if(!is.finite(sum(ll.y.cand[i,,]))) next #jump too far for obs mod ll
                 ll.s2.cand[i,]=ll.s2[i,]
                 if(ACtype=="markov"){
-                  if(l==1){#only ll.s2[i,1] matters
-                    #time 1 to 2
-                    ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]],log=TRUE)
-                  }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
-                    #time l-1 to time l
-                    ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]],log=TRUE)
-                    #time l to l+1
-                    ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]],log=TRUE)
-                  }else{#only ll.s2[i,t-1] matters
-                    #time t-1 to t
-                    ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]],log=TRUE)
+                  if(!useverts){#truncate
+                    if(l==1){#only ll.s2[i,1] matters
+                      #time 1 to 2
+                      ll.s2.cand[i,1]=log(dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]])/(pnorm(xlim[2],Scand[1],sigma_t[sex[i]])-
+                                                                                       pnorm(xlim[1],Scand[1],sigma_t[sex[i]])))
+                      ll.s2.cand[i,1]=ll.s2.cand[i,1]+log(dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]])/
+                                                            (pnorm(ylim[2],Scand[2],sigma_t[sex[i]])-pnorm(ylim[1],Scand[2],sigma_t[sex[i]])))
+                    }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                      #time l-1 to time l
+                      ll.s2.cand[i,l-1]=log(dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]])/(pnorm(xlim[2],s2[i,l-1,1],sigma_t[sex[i]])-
+                                                                                           pnorm(xlim[1],s2[i,l-1,1],sigma_t[sex[i]])))
+                      ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]])/
+                                                                (pnorm(ylim[2],s2[i,l-1,2],sigma_t[sex[i]])-pnorm(ylim[1],s2[i,l-1,2],sigma_t[sex[i]])))
+                      #time l to l+1
+                      ll.s2.cand[i,l]=log(dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]])/(pnorm(xlim[2],Scand[1],sigma_t[sex[i]])-
+                                                                                         pnorm(xlim[1],Scand[1],sigma_t[sex[i]])))
+                      ll.s2.cand[i,l]=ll.s2.cand[i,l]+log(dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]])/
+                                                            (pnorm(ylim[2],Scand[2],sigma_t[sex[i]])-pnorm(ylim[1],Scand[2],sigma_t[sex[i]])))
+                    }else{#only ll.s2[i,t-1] matters
+                      #time t-1 to t
+                      ll.s2.cand[i,t-1]=log(dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]])/(pnorm(xlim[2],s2[i,t-1,1],sigma_t[sex[i]])-
+                                                                                           pnorm(xlim[1],s2[i,t-1,1],sigma_t[sex[i]])))
+                      ll.s2.cand[i,t-1]=ll.s2.cand[i,t-1]+log(dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]])/
+                                                                (pnorm(ylim[2],s2[i,t-1,2],sigma_t[sex[i]])-pnorm(ylim[1],s2[i,t-1,2],sigma_t[sex[i]])))
+                    }
+                  }else{
+                    if(l==1){#only ll.s2[i,1] matters
+                      #time 1 to 2
+                      ll.s2.cand[i,1]=dnorm(s2[i,2,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,2,2],Scand[2],sigma_t[sex[i]],log=TRUE)
+                    }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
+                      #time l-1 to time l
+                      ll.s2.cand[i,l-1]=dnorm(Scand[1],s2[i,l-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,l-1,2],sigma_t[sex[i]],log=TRUE)
+                      #time l to l+1
+                      ll.s2.cand[i,l]=dnorm(s2[i,l+1,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,l+1,2],Scand[2],sigma_t[sex[i]],log=TRUE)
+                    }else{#only ll.s2[i,t-1] matters
+                      #time t-1 to t
+                      ll.s2.cand[i,t-1]=dnorm(Scand[1],s2[i,t-1,1],sigma_t[sex[i]],log=TRUE)+dnorm(Scand[2],s2[i,t-1,2],sigma_t[sex[i]],log=TRUE)
+                    }
                   }
                 }else{#markov 2
                   if(l==1){#only ll.s2[i,1] matters
                     #time 1 to 2
-                    dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+                    dists=distances[s2.cell.cand,]
                     probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                     probs=probs/sum(probs)
                     pick=rep(0,NdSS)
@@ -1990,14 +2133,14 @@ SCRmcmcOpensex <-
                     ll.s2.cand[i,1]=dmultinom(pick,1,probs,log=TRUE)
                   }else if(l>1&l<t){#ll.s2[i,l-1] and ll.s2[i,l] matter
                     #time l-1 to time l
-                    dists=sqrt((s2[i,l-1,1]-dSS[,1])^2+(s2[i,l-1,2]-dSS[,2])^2)
+                    dists=distances[s2.cell[i,l-1],]
                     probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                     probs=probs/sum(probs)
                     pick=rep(0,NdSS)
                     pick[s2.cell.cand]=1#propose to pick this one
                     ll.s2.cand[i,l-1]=dmultinom(pick,1,probs,log=TRUE)
                     #time l to l+1
-                    dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+                    dists=distances[s2.cell.cand,]
                     probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                     probs=probs/sum(probs)
                     pick=rep(0,NdSS)
@@ -2005,7 +2148,7 @@ SCRmcmcOpensex <-
                     ll.s2.cand[i,l]=dmultinom(pick,1,probs,log=TRUE)
                   }else{#only ll.s2[i,t-1] matters
                     #time t-1 to t
-                    dists=sqrt((s2[i,t-1,1]-dSS[,1])^2+(s2[i,t-1,2]-dSS[,2])^2)
+                    dists=distances[s2.cell[i,l-1],]
                     probs=dexp(dists,1/sigma_t[sex[i]])#cells you can pick
                     probs=probs/sum(probs)
                     pick=rep(0,NdSS)
@@ -2036,11 +2179,11 @@ SCRmcmcOpensex <-
         #Update meta mus
         for (i in 1:M){
           Scand <- c(rnorm(1,s1[i,1],proppars$s1x), rnorm(1,s1[i,2],proppars$s1y))
-          if(usedSS){
-            dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
-            s1.cell.cand=which(dists==min(dists))
-            Scand=dSS[s1.cand.cell,]
-          }
+          # if(usedSS){
+          #   dists=sqrt((Scand[1]-dSS[,1])^2+(Scand[2]-dSS[,2])^2)
+          #   s1.cell.cand=which(dists==min(dists))
+          #   Scand=dSS[s1.cell.cand,1:2]
+          # }
           if(useverts==FALSE){
             inbox <- Scand[1] < xlim[2] & Scand[1] > xlim[1] & Scand[2] < ylim[2] & Scand[2] > ylim[1]
           }else{
@@ -2048,7 +2191,15 @@ SCRmcmcOpensex <-
           }
           if(inbox){
             ll.s2.cand[i,]<-dnorm(s2[i,,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t[sex[i]],log=TRUE)
-            if (runif(1) < exp(sum(ll.s2.cand[i,]) - sum(ll.s2[i,]))) {
+            if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+              ll.s2.cand[i,]=dnorm(s2[i,,1],Scand[1],sigma_t[sex[i]],log=TRUE)+dnorm(s2[i,,2],Scand[2],sigma_t[sex[i]],log=TRUE)
+            }else{#truncate
+              ll.s2.cand[i,]=log(dnorm(s2[i,,1],Scand[1],sigma_t[sex[i]])/
+                                   (pnorm(xlim[2],Scand[1],sigma_t[sex[i]])-pnorm(xlim[1],Scand[1],sigma_t[sex[i]])))
+              ll.s2.cand[i,]=ll.s2.cand[i,]+log(dnorm(s2[i,,2],Scand[2],sigma_t[sex[i]])/
+                                                  (pnorm(ylim[2],Scand[2],sigma_t[sex[i]])-pnorm(ylim[1],Scand[2],sigma_t[sex[i]])))
+            }
+            if(runif(1) < exp(sum(ll.s2.cand[i,]) - sum(ll.s2[i,]))) {
               s1[i, ]=Scand
               ll.s2[i,]=ll.s2.cand[i,]
             }
@@ -2058,8 +2209,15 @@ SCRmcmcOpensex <-
         if(sexparms$sigma_t=="fixed"){
           sigma_t.cand <- rnorm(1,sigma_t[1],proppars$sigma_t[1])
           if(sigma_t.cand > 0){
-            ll.s2.cand=dnorm(s2[,,1],s1[,1],sigma_t.cand,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t.cand,log=TRUE)
-            if (runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))) {
+            if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+              ll.s2.cand=dnorm(s2[,,1],s1[,1],sigma_t.cand,log=TRUE)+dnorm(s2[,,2],s1[,2],sigma_t.cand,log=TRUE)
+            }else{
+              ll.s2.cand=log(dnorm(s2[,,1],s1[,1],sigma_t.cand)/
+                               (pnorm(xlim[2],s1[,1],sigma_t.cand)-pnorm(xlim[1],s1[,1],sigma_t.cand)))
+              ll.s2.cand=ll.s2.cand+log(dnorm(s2[,,2],s1[,2],sigma_t.cand)/
+                                          (pnorm(ylim[2],s1[,2],sigma_t.cand)-pnorm(ylim[1],s1[,2],sigma_t.cand)))
+            }
+            if(runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))) {
               sigma_t[1:2]=sigma_t.cand
               ll.s2=ll.s2.cand
             }
@@ -2070,6 +2228,14 @@ SCRmcmcOpensex <-
             if(sigma_t.cand > 0){
               ll.s2.cand=ll.s2
               ll.s2.cand[sex==i2,]=dnorm(s2[sex==i2,,1],s1[sex==i2,1],sigma_t.cand,log=TRUE)+dnorm(s2[sex==i2,,2],s1[sex==i2,2],sigma_t.cand,log=TRUE)
+              if(ACtype=="metamu2"|(ACtype=="metamu"&useverts)){
+                ll.s2.cand[sex==i2,]=dnorm(s2[sex==i2,,1],s1[sex==i2,1],sigma_t.cand,log=TRUE)+dnorm(s2[sex==i2,,2],s1[sex==i2,2],sigma_t.cand,log=TRUE)
+              }else{
+                ll.s2.cand[sex==i2,]=log(dnorm(s2[sex==i2,,1],s1[sex==i2,1],sigma_t.cand)/
+                                 (pnorm(xlim[2],s1[sex==i2,1],sigma_t.cand)-pnorm(xlim[1],s1[sex==i2,1],sigma_t.cand)))
+                ll.s2.cand[sex==i2,]=ll.s2.cand[sex==i2,]+log(dnorm(s2[sex==i2,,2],s1[sex==i2,2],sigma_t.cand)/
+                                            (pnorm(ylim[2],s1[sex==i2,2],sigma_t.cand)-pnorm(ylim[1],s1[sex==i2,2],sigma_t.cand)))
+              }
               if (runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))) {
                 sigma_t[i2]=sigma_t.cand
                 ll.s2=ll.s2.cand
@@ -2084,7 +2250,14 @@ SCRmcmcOpensex <-
           if(sigma_t.cand > 0){
             for(l in 2:t){
               for(i in 1:M){
-                ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+                if(!useverts){#truncate
+                  ll.s2.cand[i,l-1]=log(dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand)/(pnorm(xlim[2],s2[i,l-1,1],sigma_t.cand)-
+                                                                                     pnorm(xlim[1],s2[i,l-1,1],sigma_t.cand)))
+                  ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand)/
+                                                            (pnorm(ylim[2],s2[i,l-1,2],sigma_t.cand)-pnorm(ylim[1],s2[i,l-1,2],sigma_t.cand)))
+                }else{
+                  ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+                }
               }
             }
             if(runif(1) < exp(sum(ll.s2.cand) - sum(ll.s2))){
@@ -2100,7 +2273,14 @@ SCRmcmcOpensex <-
               for(l in 2:t){
                 for(i in 1:M){
                   if(sex[i]==i2){
-                    ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+                    if(!useverts){#truncate
+                      ll.s2.cand[i,l-1]=log(dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand)/
+                                              (pnorm(xlim[2],s2[i,l-1,1],sigma_t.cand)- pnorm(xlim[1],s2[i,l-1,1],sigma_t.cand)))
+                      ll.s2.cand[i,l-1]=ll.s2.cand[i,l-1]+log(dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand)/
+                                                                (pnorm(ylim[2],s2[i,l-1,2],sigma_t.cand)-pnorm(ylim[1],s2[i,l-1,2],sigma_t.cand)))
+                    }else{
+                      ll.s2.cand[i,l-1]=dnorm(s2[i,l,1],s2[i,l-1,1],sigma_t.cand,log=TRUE)+dnorm(s2[i,l,2],s2[i,l-1,2],sigma_t.cand,log=TRUE)
+                    }
                   }
                 }
               }
@@ -2117,7 +2297,7 @@ SCRmcmcOpensex <-
           sigma_t.cand <- rnorm(1,sigma_t[1],proppars$sigma_t[1])
           if(sigma_t.cand > 0){
             for(l in 2:t){
-              dists=e2dist(s2[,l-1,],dSS[,1:2])#cells each ind can choose
+              dists=distances[s2.cell[,l-1],]#cells each ind can choose
               for(i in 1:M){
                 probs=dexp(dists[i,],1/sigma_t.cand)
                 probs=probs/sum(probs)
@@ -2137,7 +2317,7 @@ SCRmcmcOpensex <-
             if(sigma_t.cand > 0){
               ll.s2.cand=ll.s2
               for(l in 2:t){
-                dists=e2dist(s2[,l-1,],dSS[,1:2])#cells each ind can choose
+                dists=distances[s2.cell[,l-1],]#cells each ind can choose
                 for(i in 1:M){
                   if(sex[i]==i2){
                     probs=dexp(dists[i,],1/sigma_t.cand)
@@ -2165,18 +2345,18 @@ SCRmcmcOpensex <-
         zout[idx,,]<- z
         if(ACtype%in%c("metamu","metamu2","markov","markov2")){
           if(sexparms$sigma_t=="sex"){
-            out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,sigma_t,psex)
+            out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,sigma_t,psex,psi)
           }else{
-            out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,sigma_t[1],psex)
+            out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,sigma_t[1],psex,psi)
           }
           s2xout[idx,,]<- s2[,,1]
           s2yout[idx,,]<- s2[,,2]
         }else if(ACtype=="independent"){
-          out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,psex)
+          out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,psex,psi)
           s2xout[idx,,]<- s2[,,1]
           s2yout[idx,,]<- s2[,,2]
         }else{
-          out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,psex)
+          out[idx,]<- c(lam0,sigma ,gamma,phi,N,Nm,Nf,psex,psi)
         }
         idx=idx+1
       }

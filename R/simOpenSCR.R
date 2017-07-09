@@ -28,6 +28,7 @@ e2dist<-function (x, y)
 #' the state space), and "independent" assumes animals randomly mix between years.
 #' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov"
 #' @param M an integer indicating the level of data augmentation to use during simulation.
+#' @param vertices a list of polygon vertices for each year if state space is not rectangular
 #' @return a list containing the capture history, activity centers, trap object, and several other data objects and summaries.
 #' @description This function simulates data from an open population SCR model.
 #' @author Ben Augustine
@@ -35,7 +36,7 @@ e2dist<-function (x, y)
 
 simOpenSCR <-
   function(N=c(40,60,80),gamma=NULL,phi=rep(0.8,2),lam0=rep(0.2,3),sigma=rep(0.50,3),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
-           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000){
+           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,primary=NA){
     #Check for user errors
     if(length(N)==1&is.null(gamma)){
       stop("Must provide gamma if length(N)==1")
@@ -55,6 +56,18 @@ simOpenSCR <-
     if(!(ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&!is.null(sigma_t)){
       warning("Ignoring sigma_t because ACtype is not metamu, metamu2, or markov")
     }
+    if(is.na(primary[1])){
+      primary=rep(1,t)
+    }else{
+      for(l in 1:t){
+        if(primary[l]==0){
+          X[[l]]=matrix(nrow=0,ncol=0)
+        }
+      }
+      if(primary[1]==0){
+        stop("first primary period must be a 1 (data recorded)")
+      }
+    }
     storeparms=list(N=N,gamma=gamma,lam0=lam0,sigma=sigma,phi=phi)
     # if(!is.na(dSS[1])){
     #   usedSS=TRUE
@@ -69,7 +82,7 @@ simOpenSCR <-
       if(!is.list(vertices)){
         stop("vertices must be a list")
       }
-      if(any(!unlist(lapply(poly,is.matrix)))){
+      if(any(!unlist(lapply(vertices,is.matrix)))){
         stop("not all vertices list elements are matrices")
       }
     }
@@ -77,9 +90,13 @@ simOpenSCR <-
     #   warning("ignoring vertices since dSS supplied")
     # }
     if(!useverts){
-      minmax=array(NA,dim=c(length(X),2,2))
+      minmax=array(NA,dim=c(sum(primary==1),2,2))
+      idx=1
       for(i in 1:length(X)){
-        minmax[i,,]=rbind(apply(X[[i]],2,min),apply(X[[i]],2,max))
+        if(primary[i]==1){
+          minmax[idx,,]=rbind(apply(X[[i]],2,min),apply(X[[i]],2,max))
+          idx=idx+1
+        }
       }
       xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
       xlim=xylim[,1]
@@ -112,8 +129,10 @@ simOpenSCR <-
 
       for(i in 1:t){
         s[,i,]=mu
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        }
       }
     }else if(ACtype=="metamu"){
       if(useverts){
@@ -149,8 +168,10 @@ simOpenSCR <-
             }
           }
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        }
       }
     }else if(ACtype=="metamu2"){
       if(useverts){
@@ -170,8 +191,10 @@ simOpenSCR <-
           s[j,i,1]=rnorm(1,mu[j,1],sigma_t)
           s[j,i,2]=rnorm(1,mu[j,2],sigma_t)
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        }
       }
 
     }else if(ACtype=="markov"){
@@ -210,8 +233,10 @@ simOpenSCR <-
             }
           }
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        }
       }
     }else if(ACtype=="independent"){
       for(i in 1:t){
@@ -220,7 +245,6 @@ simOpenSCR <-
           countout=0
           for(j in 1:M){
             inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
-
             while(inside==FALSE){
               s[j,i,]=c(runif(1, xlim[1]-buff,xlim[2]+buff), runif(1,ylim[1]-buff,ylim[2]+buff))
               inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
@@ -231,10 +255,11 @@ simOpenSCR <-
             }
           }
         }
-        D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-        lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        }
       }
-
     }else{
       stop("ACtype not recognized")
     }
@@ -243,7 +268,6 @@ simOpenSCR <-
     if(length(phi)==1){
       phi=rep(phi,t-1)
     }
-
     if(is.null(gamma)){
       gamma=rep(NA,t-1)
       for(l in 2:t){
@@ -284,17 +308,21 @@ simOpenSCR <-
     if(obstype=="bernoulli"){
       pd=1-exp(-lamd)
       for(l in 1:t){
-        for(i in 1:M){
-          for(j in 1:J[l]){
-            y[i,j,l]=rbinom(1,K[l],pd[i,j,l]*z[i,l])
+        if(primary[l]){
+          for(i in 1:M){
+            for(j in 1:J[l]){
+              y[i,j,l]=rbinom(1,K[l],pd[i,j,l]*z[i,l])
+            }
           }
         }
       }
     }else if(obstype=="poisson"){
       for(l in 1:t){
-        for(i in 1:M){
-          for(j in 1:J[l]){
-            y[i,j,l]=rpois(1,K[l]*lamd[i,j,l]*z[i,l])
+        if(primary[l]){
+          for(i in 1:M){
+            for(j in 1:J[l]){
+              y[i,j,l]=rpois(1,K[l]*lamd[i,j,l]*z[i,l])
+            }
           }
         }
       }
@@ -329,15 +357,22 @@ simOpenSCR <-
     }
     if(!ACtype%in%c("metamu","metamu2")){
       if(!missing(vertices)){
-        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices)
+        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),
+                  z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices,
+                  primary=primary)
       }else{
-        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype)
+        out<-list(y=y,s=s,yfull=yfull,sfull=sfull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),
+                  z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,primary=primary)
       }
     }else{
       if(!missing(vertices)){
-        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype,vertices=vertices)
+        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,
+                  J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,
+                  ACtype=ACtype,vertices=vertices,primary=primary)
       }else{
-        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,ACtype=ACtype)
+        out<-list(y=y,mu=mu,s=s,yfull=yfull,sfull=sfull,mufull=mufull,X=X,K=K,n=n,n2d=n2d,buff=buff,
+                  J=J,EN=N,N=colSums(z),z=z,gamma=gamma,phi=storeparms$phi,obstype=obstype,
+                  ACtype=ACtype,primary=primary)
       }
     }
     return(out)
