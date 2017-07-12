@@ -5,30 +5,42 @@ e2dist<-function (x, y)
   matrix(dvec, nrow = nrow(x), ncol = nrow(y), byrow = F)
 }
 
-#' Simulate data from a Open population SCR study.
-#' @param N a vector indicating the number of individuals to simulate. If size 1, provide a gamma to determine N in subsequent years.
-#' Otherwise, size is t, the number of years.
-#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If size 1, constant rate is assumed.
-#' Otherwise, size is t, the number of years.
-#' Otherwise, size is t, the number of years.
-#' @param sigma a vector containing the spatial scale parameter in each year.  If size 1, sigma is fixed across years.
-#' @param gamma a vector containing the per capita recruitment rates for each year.  If size 1, gamma is fixed across years.
-#' Otherwise, size is t-1.  Do not enter a gamma if N for all years specified.
-#' @param phi a vector containing the survival rates for each year. If size 1, phi is fixed across years.
+#' Simulate data from an open population SCR study with fixed or primary period-specific parameters.
+#' @param N a vector indicating the number of individuals to simulate. If size 1, provide one or multiple gammas (see gamma below) to determine N in subsequent primary periods.
+#' Otherwise, size is t, the number of primary periods.
+#' @param lam0 a vector containing the detection function expected number of captures at distance 0. If size 1, a constant rate across primary periods is assumed.
+#' Otherwise, size is t, the number of primary periods.
+#' @param sigma a vector containing the detection function spatial scale parameter.  If size 1, sigma is fixed across primary periods.
+#' #' Otherwise, size is t, the number of primary periods.
+#' @param gamma a vector containing the per capita recruitment rates between primary periods.  If size 1, gamma is fixed across primary periods.
+#' Otherwise, size is t-1.  Do not enter a gamma if N for all primary periods specified.
+#' @param phi a vector containing the survival rates between primary periods. If size 1, phi is fixed across primary periods.
 #' Otherwise, size is t-1.
-#' @param K  a vector containing the number of capture occasions in each year
-#' @param X a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
-#' the number of traps in each year.
-#' @param buff the distance to buffer the trapping array in the X and Y dimensions to produce the state space
+#' @param K  a vector containing the number of capture occasions in each of the t primary periods
+#' @param X a list of trap locations in each primary period.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
+#' the number of traps in primary period l.
+#' @param buff the distance to buffer the trapping array in the X and Y dimensions to produce the state space in which the population lives
 #' @param obstype observation type, either "bernoulli" or "poisson"
-#' @param ACtype Type of activity centers.  "fixed" don't move between years, "metamu" assume a bivariate normal distribution
-#' with a meta mu and sigma_t with yearly activity centers required to stay inside the state space , "metamu2", is
-#' the same as "metamu" except only meta mus are required to stay inside the state space.  markov" assumes activity
-#' centers in year t+1 is a bivariate normal draw centered around the activity center in year t (but must stay within
-#' the state space), and "independent" assumes animals randomly mix between years.
-#' @param sigma_t a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov"
-#' @param M an integer indicating the level of data augmentation to use during simulation.
-#' @param vertices a list of polygon vertices for each year if state space is not rectangular
+#' @param ACtype A character indicating the type of activity centers.  "fixed" activity centers do not move between primary periods, "metamu" assumes there is a
+#' meta activity center around which the primary period activity centers distributed following a bivariate normal distribution
+#' with spatial scale parameter sigma_t.  Primary period activity centers are required to stay inside the state space.
+#' "metamu2" is identical to "metamu" except primary period activity centers are allowed to leave the state space.
+#'  markov" assumes activity centers in primary period 1 are distributed uniformly across the state space and the
+#'  activy centers in primary period l+1 are a bivariate normal draw centered around the activity center in
+#'  primary period l (but must stay within the state space).  "markov2" is the same as "markov" except each
+#'  dispersal considers the available distances to disperse to in a use vs. availability framework. Discrete
+#'  state space is required.  Finally, "independent" assumes animals randomly mix between primary periods.
+#'  (spatial uniformity in all primary periods with independence between primary periods).
+#' @param sigma_t a numeric indicating the between primary period spatial scale parameter for ACtypes "metamu" "metamu2", "markov" and "markov2"
+#' This is the only parameter that is not primary period-specific. Very rich data sets would be required to estimate a year-specific sigma_t.
+#' @param M an integer indicating the level of data augmentation to use during simulation.  This should be
+#' larger than the total number of individuals ever alive.
+#' @param vertices an optional list of polygon vertices to use for the state space.  Each list element should be a matrix with 2
+#' columns, corresponding to the X and Y coordinates of polygon vertices.  The vertices must close the polygon (e.g. the first
+#' and last vertices should be the same).  Cannot enter both vertices and dSS.
+#' @param dSS an optional (N_SS x 2) matrix of discrete state space locations.  The matrix should have 2 columns corresponding to
+#' the X and Y coordinates of each state space element.  Cannot enter both vertices and dSS.
+#' @param primary a vector of length T with entries 1 if the population is to be observed in primary period l and 0 otherwise.
 #' @return a list containing the capture history, activity centers, trap object, and several other data objects and summaries.
 #' @description This function simulates data from an open population SCR model.
 #' @author Ben Augustine
@@ -36,7 +48,7 @@ e2dist<-function (x, y)
 
 simOpenSCR <-
   function(N=c(40,60,80),gamma=NULL,phi=rep(0.8,2),lam0=rep(0.2,3),sigma=rep(0.50,3),K=rep(10,3),X=X,t=3,M=M,sigma_t=NULL,buff=3,
-           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,primary=NA){
+           obstype="bernoulli",ACtype="fixed",vertices=NA,maxprop=10000,dSS=NA,primary=NA){
     #Check for user errors
     if(length(N)==1&is.null(gamma)){
       stop("Must provide gamma if length(N)==1")
@@ -50,11 +62,22 @@ simOpenSCR <-
     if(length(X)!=t){
       stop("Must supply a X (trap locations) for each year")
     }
-    if((ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&is.null(sigma_t)){
-      stop("If ACtype is metamu, metamu2, or markov, must specify sigma_t")
+    if((ACtype%in%c("metamu","metamu2","markov","markov2"))&is.null(sigma_t)){
+      stop("If ACtype is metamu, metamu2, markov or markov2, must specify sigma_t")
     }
-    if(!(ACtype=="metamu"|ACtype=="metamu2"|ACtype=="markov")&!is.null(sigma_t)){
-      warning("Ignoring sigma_t because ACtype is not metamu, metamu2, or markov")
+    if(!(ACtype%in%c("metamu","metamu2","markov","markov2"))&!is.null(sigma_t)){
+      warning("Ignoring sigma_t because ACtype is not metamu, metamu2, markov, or markov2")
+    }
+    if(is.data.frame(dSS)){
+      dSS=as.matrix(dSS)
+    }
+    if(ACtype=="markov2"){
+      if(is.na(dSS[1])){
+        stop("If ACtype is markov2, must input a discrete state space")
+      }
+      if(!is.na(vertices)){
+        warning("Ignoring vertices since ACtype is markov2")
+      }
     }
     if(is.na(primary[1])){
       primary=rep(1,t)
@@ -69,15 +92,15 @@ simOpenSCR <-
       }
     }
     storeparms=list(N=N,gamma=gamma,lam0=lam0,sigma=sigma,phi=phi)
-    # if(!is.na(dSS[1])){
-    #   usedSS=TRUE
-    # }
-
     J=unlist(lapply(X,nrow))
     maxJ=max(J)
     #Get state space extent such that buffer is at least buff on all grids
     #minmax=rbind(apply(X[[1]],2,min),apply(X[[1]],2,max))
     useverts=!is.na(vertices)[1]
+    usedSS=!is.na(dSS)[1]
+    if(useverts&usedSS){
+      stop("Cannot input both vertices and dSS")
+    }
     if(useverts){
       if(!is.list(vertices)){
         stop("vertices must be a list")
@@ -86,9 +109,6 @@ simOpenSCR <-
         stop("not all vertices list elements are matrices")
       }
     }
-    # if(usedSS==TRUE&useverts){
-    #   warning("ignoring vertices since dSS supplied")
-    # }
     if(!useverts){
       minmax=array(NA,dim=c(sum(primary==1),2,2))
       idx=1
@@ -123,10 +143,12 @@ simOpenSCR <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        NdSS=nrow(dSS)
+        mu=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
-
       for(i in 1:t){
         s[,i,]=mu
         if(primary[i]){
@@ -144,6 +166,8 @@ simOpenSCR <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using vertices in continuous space")
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
@@ -183,17 +207,19 @@ simOpenSCR <-
             inside=any(unlist(lapply(vertices,function(x){inout(mu[i,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using vertices in continuous space")
       }else{
         mu<- cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
       }
-      for(i in 1:t){#meta mu movement, only meta mus stay in SS
+      for(l in 1:t){#meta mu movement, only meta mus stay in SS
         for(j in 1:M){
-          s[j,i,1]=rnorm(1,mu[j,1],sigma_t)
-          s[j,i,2]=rnorm(1,mu[j,2],sigma_t)
+          s[j,l,1]=rnorm(1,mu[j,1],sigma_t)
+          s[j,l,2]=rnorm(1,mu[j,2],sigma_t)
         }
-        if(primary[i]){
-          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        if(primary[l]){
+          D[,1:nrow(X[[l]]),l]=e2dist(s[,l,],X[[l]])
+          lamd[,,l]=lam0[l]*exp(-D[,,l]^2/(2*sigma[l]*sigma[l]))
         }
       }
 
@@ -207,6 +233,8 @@ simOpenSCR <-
             inside=any(unlist(lapply(vertices,function(x){inout(s[i,1,],x)})))
           }
         }
+      }else if(usedSS){
+        stop("Ben hasn't coded this, yet.  Try using markov2 with dSS or vertices in continuous space with markov")
       }else{
         s[,1,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff)) #initial locations
       }
@@ -238,10 +266,31 @@ simOpenSCR <-
           lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
         }
       }
+    }else if(ACtype=="markov2"){
+      #initial locs
+      if(usedSS==FALSE){
+        stop("must enter dSS with ACtype=markov2")
+      }
+      NdSS=nrow(dSS)
+      s[,1,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2] #initial locations
+      for(l in 2:t){
+        dists=e2dist(s[,l-1,],dSS[,1:2])
+        for(i in 1:M){
+          probs=dexp(dists[i,],1/sigma_t)
+          probs=probs/sum(probs)
+          s[i,l,]=dSS[sample(1:NdSS,1,prob=probs),1:2]
+        }
+      }
+      for(l in 1:t){
+        if(primary[l]){
+          D[,1:nrow(X[[l]]),l]=e2dist(s[,l,],X[[l]])
+          lamd[,,l]=lam0[l]*exp(-D[,,l]^2/(2*sigma[l]*sigma[l]))
+        }
+      }
     }else if(ACtype=="independent"){
       for(i in 1:t){
-        s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
         if(useverts){
+          s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
           countout=0
           for(j in 1:M){
             inside=any(unlist(lapply(vertices,function(x){inout(s[j,i,],x)})))
@@ -254,10 +303,19 @@ simOpenSCR <-
               }
             }
           }
+        }else if(usedSS){
+          NdSS=nrow(dSS)
+          for(l in 1:t){
+            s[,l,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
+          }
+        }else{
+          s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
         }
-        if(primary[i]){
-          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+        for(i in 1:t){
+          if(primary[i]){
+            D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+            lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
+          }
         }
       }
     }else{

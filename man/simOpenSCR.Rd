@@ -2,49 +2,64 @@
 % Please edit documentation in R/simOpenSCR.R
 \name{simOpenSCR}
 \alias{simOpenSCR}
-\title{Simulate data from a Open population SCR study.}
+\title{Simulate data from an open population SCR study with fixed or primary period-specific parameters.}
 \usage{
 simOpenSCR(N = c(40, 60, 80), gamma = NULL, phi = rep(0.8, 2),
   lam0 = rep(0.2, 3), sigma = rep(0.5, 3), K = rep(10, 3), X = X,
   t = 3, M = M, sigma_t = NULL, buff = 3, obstype = "bernoulli",
-  ACtype = "fixed", vertices = NA, maxprop = 10000, primary = NA)
+  ACtype = "fixed", vertices = NA, maxprop = 10000, dSS = NA,
+  primary = NA)
 }
 \arguments{
-\item{N}{a vector indicating the number of individuals to simulate. If size 1, provide a gamma to determine N in subsequent years.
-Otherwise, size is t, the number of years.}
+\item{N}{a vector indicating the number of individuals to simulate. If size 1, provide one or multiple gammas (see gamma below) to determine N in subsequent primary periods.
+Otherwise, size is t, the number of primary periods.}
 
-\item{gamma}{a vector containing the per capita recruitment rates for each year.  If size 1, gamma is fixed across years.
-Otherwise, size is t-1.  Do not enter a gamma if N for all years specified.}
+\item{gamma}{a vector containing the per capita recruitment rates between primary periods.  If size 1, gamma is fixed across primary periods.
+Otherwise, size is t-1.  Do not enter a gamma if N for all primary periods specified.}
 
-\item{phi}{a vector containing the survival rates for each year. If size 1, phi is fixed across years.
+\item{phi}{a vector containing the survival rates between primary periods. If size 1, phi is fixed across primary periods.
 Otherwise, size is t-1.}
 
-\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If size 1, constant rate is assumed.
-Otherwise, size is t, the number of years.
-Otherwise, size is t, the number of years.}
+\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If size 1, a constant rate across primary periods is assumed.
+Otherwise, size is t, the number of primary periods.}
 
-\item{sigma}{a vector containing the spatial scale parameter in each year.  If size 1, sigma is fixed across years.}
+\item{sigma}{a vector containing the detection function spatial scale parameter.  If size 1, sigma is fixed across primary periods.
+#' Otherwise, size is t, the number of primary periods.}
 
-\item{K}{a vector containing the number of capture occasions in each year}
+\item{K}{a vector containing the number of capture occasions in each of the t primary periods}
 
-\item{X}{a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
-the number of traps in each year.}
+\item{X}{a list of trap locations in each primary period.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
+the number of traps in primary period l.}
 
-\item{M}{an integer indicating the level of data augmentation to use during simulation.}
+\item{M}{an integer indicating the level of data augmentation to use during simulation.  This should be
+larger than the total number of individuals ever alive.}
 
-\item{sigma_t}{a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", and "markov"}
+\item{sigma_t}{a numeric indicating the between primary period spatial scale parameter for ACtypes "metamu" "metamu2", "markov" and "markov2"
+This is the only parameter that is not primary period-specific. Very rich data sets would be required to estimate a year-specific sigma_t.}
 
-\item{buff}{the distance to buffer the trapping array in the X and Y dimensions to produce the state space}
+\item{buff}{the distance to buffer the trapping array in the X and Y dimensions to produce the state space in which the population lives}
 
 \item{obstype}{observation type, either "bernoulli" or "poisson"}
 
-\item{ACtype}{Type of activity centers.  "fixed" don't move between years, "metamu" assume a bivariate normal distribution
-with a meta mu and sigma_t with yearly activity centers required to stay inside the state space , "metamu2", is
-the same as "metamu" except only meta mus are required to stay inside the state space.  markov" assumes activity
-centers in year t+1 is a bivariate normal draw centered around the activity center in year t (but must stay within
-the state space), and "independent" assumes animals randomly mix between years.}
+\item{ACtype}{A character indicating the type of activity centers.  "fixed" activity centers do not move between primary periods, "metamu" assumes there is a
+meta activity center around which the primary period activity centers distributed following a bivariate normal distribution
+with spatial scale parameter sigma_t.  Primary period activity centers are required to stay inside the state space.
+"metamu2" is identical to "metamu" except primary period activity centers are allowed to leave the state space.
+ markov" assumes activity centers in primary period 1 are distributed uniformly across the state space and the
+ activy centers in primary period l+1 are a bivariate normal draw centered around the activity center in
+ primary period l (but must stay within the state space).  "markov2" is the same as "markov" except each
+ dispersal considers the available distances to disperse to in a use vs. availability framework. Discrete
+ state space is required.  Finally, "independent" assumes animals randomly mix between primary periods.
+ (spatial uniformity in all primary periods with independence between primary periods).}
 
-\item{vertices}{a list of polygon vertices for each year if state space is not rectangular}
+\item{vertices}{an optional list of polygon vertices to use for the state space.  Each list element should be a matrix with 2
+columns, corresponding to the X and Y coordinates of polygon vertices.  The vertices must close the polygon (e.g. the first
+and last vertices should be the same).  Cannot enter both vertices and dSS.}
+
+\item{dSS}{an optional (N_SS x 2) matrix of discrete state space locations.  The matrix should have 2 columns corresponding to
+the X and Y coordinates of each state space element.  Cannot enter both vertices and dSS.}
+
+\item{primary}{a vector of length T with entries 1 if the population is to be observed in primary period l and 0 otherwise.}
 }
 \value{
 a list containing the capture history, activity centers, trap object, and several other data objects and summaries.

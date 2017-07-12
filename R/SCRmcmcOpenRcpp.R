@@ -1,6 +1,6 @@
 SCRmcmcOpenRcpp <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA){
+           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -9,10 +9,14 @@ SCRmcmcOpenRcpp <-
     for(i in 1:length(X)){
       X[[i]]=as.matrix(X[[i]])
     }
+    dSS=as.matrix(dSS)
     if(!is.na(dSS[1])&"vertices"%in%names(data)){
       rem=which(names(data)=="vertices")
       data[[rem]]=NULL
       warning("Discarding vertices since dSS supplied")
+      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
+        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
+      }
     }
     if(length(X)!=t){
       stop("must input traps for each year")
@@ -37,7 +41,6 @@ SCRmcmcOpenRcpp <-
         }
       }
     }
-    dSS=as.matrix(dSS)
     if(!is.na(dSS[1])){
       usedSS=TRUE
       if("vertices"%in%names(data)){
@@ -48,6 +51,9 @@ SCRmcmcOpenRcpp <-
       NdSS=nrow(dSS)
       useverts=FALSE
     }else{
+      if(ACtype=="markov2"){
+        stop("Must enter dSS for markov2")
+      }
       usedSS=FALSE
     }
     J<-data$J
@@ -116,7 +122,6 @@ SCRmcmcOpenRcpp <-
         tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
       }
     }
-
     ##pull out initial values
     lam0<- inits$lam0
     sigma<- inits$sigma
@@ -153,18 +158,20 @@ SCRmcmcOpenRcpp <-
     if(length(gamma)!=length(proppars$gamma)){
       stop("Must supply a tuning parameter for each gamma")
     }
-    if(!ACtype%in%c("fixed","independent","metamu","metamu2","markov")){
-      stop("ACtype must be 'fixed','independent','metamu', 'metamu2', or 'markov'")
+    if(!ACtype%in%c("fixed","independent","metamu","metamu2","markov","markov2")){
+      stop("ACtype must be 'fixed','independent','metamu', 'metamu2', 'markov' or 'markov2'")
     }
-    if(ACtype%in%c("metamu","markov")){
+    if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       if(!"sigma_t"%in%names(proppars)){
-        stop("must supply proppars$sigma_t if ACtype is metamu or markov")
-      }
-      if(!"s1x"%in%names(proppars)|!"s1y"%in%names(proppars)){
-        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu or markov")
+        stop("must supply proppars$sigma_t if ACtype is metamu, metamu2, markov, or markov2")
       }
       if(is.null(sigma_t)){
-        stop("must supply inits$sigma_t if ACtype is metamu or markov")
+        stop("must supply inits$sigma_t if ACtype is metamu, metamu2, markov, or markov2")
+      }
+    }
+    if(ACtype%in%c("metamu","metamu2","fixed")){
+      if(!"s1x"%in%names(proppars)|!"s1y"%in%names(proppars)){
+        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu, metamu2, or fixed")
       }
     }
     #augment data
@@ -350,9 +357,8 @@ SCRmcmcOpenRcpp <-
                   s2[i,l,]=trps
                 }
               }
-
             }else{
-              if(ACtype%in%c("metamu","metamu2")){#this doesn't work well for markov with larger sigma
+              if(ACtype%in%c("metamu","metamu2")){
                 inside=FALSE
                 while(inside==FALSE){
                   s2[i,l,]=c(rnorm(1,s1[i,1],sigma_t),rnorm(1,s1[i,2],sigma_t))
@@ -639,7 +645,7 @@ SCRmcmcOpenRcpp <-
       phinames="phi"
     }
     Nnames=paste("N",1:t,sep="")
-    if(ACtype%in%c("metamu","metamu2","markov")){
+    if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t+1)
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"sigma_t")
       s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
@@ -756,9 +762,29 @@ SCRmcmcOpenRcpp <-
     }
     each=unlist(lapply(inits,length))[1:4]
     npar=sum(each)+t+1
-    if(ACtype%in%c("metamu","metamu2","markov")){
+    if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       npar=npar+1
     }
+    if(!dualACup){#dummy for Rcpp
+      proppars$dualAC=1
+    }
+    if(ACtype%in%c("fixed","independent")){#dummy for Rcpp
+      sigma_t=1
+      proppars$sigma_t=1
+    }
+    if(!ACtype%in%c("metamu","metamu2","fixed")){#dummy for Rcpp
+      proppars$s1x=proppars$s1y=1
+    }
+    if(is.null(proppars$s2x)|is.null(proppars$s2x)){#dummy for Rcpp
+      proppars$s2x=proppars$s2y=1
+    }
+    if(!dualACup){#dummy for Rcpp
+      proppars$dualAC=1
+    }
+    if(is.null(proppars$propz)){#dummy for Rcpp
+      proppars$propz=10
+    }
+
     #So these aren't modified by Rcpp
     lam0in=lam0
     sigmain=sigma
@@ -772,8 +798,10 @@ SCRmcmcOpenRcpp <-
       ACtype=3
     }else if(ACtype=="independent"){
       ACtype=4#independent
-    }else{#metamu2
+    }else if(ACtype=="metamu2"){#metamu2
       ACtype=5
+    }else{
+      ACtype=6
     }
     if(obstype=="bernoulli"){
       obstype2=1
@@ -796,12 +824,19 @@ SCRmcmcOpenRcpp <-
       proppars$propz=rep(10,t-1)
     }
     primaryin=primary==1
+    if(usedSS==FALSE){
+      s1.cell=rep(1,M)
+      s2.cell=matrix(1,nrow=M,ncol=t)
+      distances=matrix(c(0,0,0,0),nrow=2,ncol=2)
+    }
+
 
     store=mcmc_Open(lam0in,  sigmain,  gammain, gamma.prime, phiin, D,lamd, y, z, a,s1,s2,
                     ACtype, useverts, vertices, xlim, ylim, known.matrix, Xidx, Xcpp, K, Ez,  psi,
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,sigma_t,niter,nburn,nthin,npar,each,jointZ,
-                    zpossible,apossible,cancel,obstype2,tf2,dSS,usedSS,primaryin)
+                    zpossible,apossible,cancel,obstype2,tf2,s2.cell-1,s1.cell-1,dSS,usedSS,primaryin,
+                    dualACup,proppars$dualAC,distances)
 
     out=store[[1]]
     s1xout=store[[2]]
@@ -857,13 +892,13 @@ SCRmcmcOpenRcpp <-
       phinames="phi"
     }
     Nnames=paste("N",1:t,sep="")
-    if(ACtype%in%c(2,3,5)){
+    if(ACtype%in%c(2,3,5,6)){
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"sigma_t","psi")
     }else{
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,"psi")
     }
     if(keepACs==TRUE){
-      if(ACtype%in%c(2,3,4,5)){
+      if(ACtype%in%c(2,3,4,5,6)){
         list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)
       }else{
         list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout)

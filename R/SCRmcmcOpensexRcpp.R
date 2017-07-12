@@ -36,7 +36,13 @@ SCRmcmcOpensexRcpp <-
       }
       NdSS=nrow(dSS)
       useverts=FALSE
+      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
+        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
+      }
     }else{
+      if(ACtype=="markov2"){
+        stop("Must enter dSS for markov2")
+      }
       usedSS=FALSE
     }
     sex=data$sex
@@ -139,9 +145,9 @@ SCRmcmcOpensexRcpp <-
         stop("must supply inits$sigma_t if ACtype is metamu or markov")
       }
     }
-    if(ACtype%in%c("metamu","markov")){
+    if(ACtype%in%c("metamu","metamu2","fixed")){
       if(!"s1x"%in%names(proppars)|!"s1y"%in%names(proppars)){
-        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu or markov")
+        stop("must supply proppars$s1x and proppars$s1y if ACtype is metamu, metamu2, or fixed")
       }
     }
     if(dualACup){
@@ -770,12 +776,12 @@ SCRmcmcOpensexRcpp <-
       }
     }
     each=unlist(lapply(inits,length))[1:4]
-    npar=sum(each)+3*t+1#added one for psex
+    npar=sum(each)+3*t+2#added one for psex and one for psi
     if(ACtype%in%c("metamu","metamu2","markov","markov2")){
       if(sexparms$sigma_t=="fixed"){
-        npar=npar+2
+        npar=npar+1
       }else{
-        npar=npar+3
+        npar=npar+2
       }
     }
     if(length(lam0)==1){
@@ -792,6 +798,9 @@ SCRmcmcOpensexRcpp <-
     }
     if(length(sigma_t)==1){
       sigma_t=rep(sigma_t,2)
+    }
+    if(!ACtype%in%c("metamu","metamu2","fixed")){#dummy for Rcpp
+      proppars$s1x=proppars$s1y=1
     }
     #So these aren't modified by Rcpp
     lam0in=lam0
@@ -828,6 +837,7 @@ SCRmcmcOpensexRcpp <-
     }
     if(is.null(sigma_t)){
       sigma_t=0.5 #dummy for Rcpp
+      proppars$sigma_t=0.5
     }
     sexparmsin=rep(FALSE,5)
     for(i in 1:5){
@@ -840,6 +850,9 @@ SCRmcmcOpensexRcpp <-
       s1.cell=rep(1,M)
       s2.cell=matrix(1,nrow=M,ncol=t)
       distances=matrix(c(0,0,0,0),nrow=2,ncol=2)
+    }
+    if(is.null(proppars$s2x)|is.null(proppars$s2x)){#dummy for Rcpp
+      proppars$s2x=proppars$s2y=1
     }
     if(!dualACup){#dummy for Rcpp
       proppars$dualAC=1

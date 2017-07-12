@@ -2,28 +2,57 @@
 % Please edit documentation in R/DerivedValues.R
 \name{DerivedValues}
 \alias{DerivedValues}
-\title{Function to post-process MCMC results. Need to extend for model without sex.}
+\title{Function to post-process MCMC results of the year-specific sampler}
 \usage{
-DerivedValues(Nm, Nf, gamma, phi, psex, psi, M)
+DerivedValues(N, gamma, phi, psi, M)
 }
 \arguments{
-\item{Nm}{matrix containing the posteriors for the number of males}
+\item{N}{matrix containing the posteriors for abundance}
 
-\item{Nf}{matrix containing the posteriors for the number of females}
+\item{gamma}{matrix or vector containing the posteriors for gamma(s)}
 
-\item{gamma}{matrix of vector containing the posteriors for gamma(s)}
+\item{phi}{matrix or vector containing the posteriors for phi(s)}
 
-\item{phi}{matrix of vector containing the posteriors for phi(s)}
+\item{psi}{vector containing the posterior for psi}
 
-\item{psex}{vector containing the posterior for psex}
+\item{M}{an integer indicating the i dimension of the augmented data}
 }
 \value{
-a list containing realized and expected population growth rates, population sizes,
-and sex ratios
+a list containing realized and expected population growth rates and population sizes,
 }
 \description{
-This function derives realized and expected population growth rates, population sizes, and sex ratios
+This function derives realized and expected population growth rates and population sizes
 from the inputted MCMC chains.
+}
+\examples{
+\dontrun{
+#Run a model
+t=3
+N=50
+p0=0.5
+lam0=-log(1-p0)
+sigma=0.750
+phi=0.7
+gamma=0.3
+buff=3
+X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Note we need 3 trap objects stuffed into the trap list
+K=c(10,10,10) #and 3 numbers of occasions within primary period
+M=225
+data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M)
+niter=1000
+nburn=0
+nthin=1
+proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2,propz=c(30,30)) #Need 1 more propz
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,Rcpp=TRUE)
+DV=DerivedValues(out$out[,5:7],out$out[,3],out$out[,4],out$out[,8],M)
+str(DV)
+library(coda)
+plot(mcmc(DV$EN))
+plot(mcmc(DV$lambda))
+plot(mcmc(DV$Elambda))
+#should discard burnin
+}
 }
 \author{
 Ben Augustine

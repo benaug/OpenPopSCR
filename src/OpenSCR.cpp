@@ -78,8 +78,9 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
                double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
-               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,
-               NumericMatrix dSS,bool usedSS,LogicalVector primary) {
+               IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,IntegerMatrix s2cell,
+               IntegerVector s1cell,NumericMatrix dSS,bool usedSS,LogicalVector primary,
+               bool dualACup,int propdualAC,NumericMatrix distances) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -223,7 +224,22 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
     }
   }
   int polys=vertices.size();//number of polygons for SS
-
+  //Set up discrete state space
+  int NdSS=dSS.nrow();
+  NumericVector dists(NdSS);
+  NumericVector dists2(NdSS);
+  NumericVector distsLL(NdSS);
+  NumericVector distsPP(NdSS);
+  NumericVector distsBP(NdSS);
+  IntegerVector chooseS=Rcpp::seq(0,NdSS-1);
+  IntegerVector pick(1);
+  IntegerMatrix s2cellcand(M,t);
+  IntegerVector s1cellcand(M);
+  double sumprob=0;
+  double MHratio=0;
+  int currpatch;
+  int backpatch;
+  double sigmamean=0;
 
   int iteridx=0;
   //////Calculate starting log likelihoods///////
@@ -267,6 +283,20 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
         }
         ll_s2_cand(i,l-1)=ll_s2(i,l-1);
+      }
+    }
+  }else if(ACtype==6){
+    for(int l=1; l<t; l++){
+      for(int i=0; i<M; i++){ //X and Y normal log-likelihood simplified
+        sumprob=0;
+        for(int i2=0; i2<NdSS;i2++){
+          distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2)/sigma_t(0)));
+          sumprob+=distsLL(i2);
+        }
+        for(int i2=0; i2<NdSS;i2++){
+          distsLL(i2)=distsLL(i2)/sumprob;
+        }
+        ll_s2(i,l-1)=log(distsLL(s2cell(i,l)));
       }
     }
   }
@@ -315,9 +345,6 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       }
     }
   }
-  //Set up discrete state space
-  int NdSS=dSS.nrow();
-  NumericVector dists(NdSS);
 
   //Here we go!
   for(int iter=0; iter<niter; iter++){
@@ -1312,30 +1339,132 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       warncount+=warn(i);
     }
     //// Now we have to update the activity centers//////////////////
-    if((ACtype==2)|(ACtype==5)){//metamu
-      // Update within year ACs
+    if(ACtype==1){//Stationary ACs
+      //Update Activity Centers
       for(int i=0; i<M; i++) {
-        for(int l=0; l<t; l++) {
-          ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
-          ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
-          if(ACtype==2){
-            if(usedSS){
-              double mindist=100000;
-              int idxdist=0;
-              for(int i2=0; i2<NdSS;i2++){
-                dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-                if(dists(i2)<mindist){
-                  mindist=dists(i2);
-                  idxdist=i2;
+        if(usedSS){
+          sigmamean=mean(sigmause);
+          sumprob=0;
+          for(int i2=0; i2<NdSS;i2++){
+            distsPP(i2)=exp(-distances(s1cell(i),i2)*distances(s1cell(i),i2)/(2*sigmamean*sigmamean));
+            sumprob+=distsPP(i2);
+          }
+          for(int i2=0; i2<NdSS;i2++){
+            distsPP(i2)=distsPP(i2)/sumprob;
+          }
+          pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+          s1cellcand(i)=pick(0);
+          ScandX(0)=dSS(s1cellcand(i),0);
+          ScandY(0)=dSS(s1cellcand(i),1);
+          //backwards
+          sumprob=0;
+          for(int i2=0; i2<NdSS;i2++){
+            distsBP(i2)=exp(-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2)/(2*sigmamean*sigmamean));
+            sumprob+=distsBP(i2);
+          }
+          for(int i2=0; i2<NdSS;i2++){
+            distsBP(i2)=distsBP(i2)/sumprob;
+          }
+          MHratio=distsBP(s1cell(i))/distsPP(s1cellcand(i));
+          inbox(0)=TRUE;
+        }else{
+          ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
+          ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
+          if(useverts==FALSE){
+            inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
+          }else{
+            inbox(0)=FALSE;
+            for(int p=0; p<polys; p++){
+              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+              if(inbox2(0)){
+                inbox(0)=TRUE;
+              }
+            }
+          }
+          MHratio=1;
+        }
+        if(inbox(0)){
+          //sum ll across j for each i and l
+          llysum=0;
+          llycandsum=0;
+          for(int l=0; l<t; l++){
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
                 }
               }
-              ScandX(0)=dSS(idxdist,0);
-              ScandY(0)=dSS(idxdist,1);
             }
+          }
+          rand=Rcpp::runif(1);
+          if((rand(0)<exp(llycandsum-llysum)*MHratio)){
+            s1(i,0)=ScandX(0);
+            s1(i,1)=ScandY(0);
+            if(usedSS){
+              s1cell(i)=s1cellcand(i);
+            }
+            for(int l=0; l<t; l++){
+              s2(i,l,0)=ScandX(0);
+              s2(i,l,1)=ScandY(0);
+              if(primary(l)){
+                for(int j=0; j<J; j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                }
+              }
+            }
+          }
+        }
+      }
+    }else if(ACtype==4){//independent ACs
+      for(int l=0; l<t; l++){
+        for(int i=0; i<M; i++) {
+          if(usedSS){
+            sigmamean=mean(sigmause);
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsPP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=distsPP(i2)/sumprob;
+            }
+            pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+            s2cellcand(i,l)=pick(0);
+            ScandX(0)=dSS(s2cellcand(i,l),0);
+            ScandY(0)=dSS(s2cellcand(i,l),1);
+            //backwards
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+             distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsBP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=distsBP(i2)/sumprob;
+            }
+            MHratio=distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l));
+            inbox(0)=TRUE;
+          }else{
+            ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
+            ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{
-              // inbox=inoutCppOpen(ScandX,ScandY,vertices);
               inbox(0)=FALSE;
               for(int p=0; p<polys; p++){
                 inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
@@ -1344,8 +1473,100 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                 }
               }
             }
-          }else{
+            MHratio=1;
+          }
+          if(inbox(0)){
+            //sum ll across j for each i and l
+            llysum=0;
+            llycandsum=0;
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
+              }
+            }
+            rand=Rcpp::runif(1);
+            if((rand(0)<exp(llycandsum-llysum)*MHratio)){
+              s2(i,l,0)=ScandX(0);
+              s2(i,l,1)=ScandY(0);
+              if(usedSS){
+                s2cell(i,l)=s2cellcand(i,l);
+              }
+              if(primary(l)){
+                for(int j=0; j<J; j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                }
+              }
+            }
+          }
+        }
+      }
+    }else if((ACtype==2)|(ACtype==5)){//metamu
+      // Update within year ACs
+      for(int i=0; i<M; i++) {
+        for(int l=0; l<t; l++) {
+          if(usedSS){
+            sigmamean=mean(sigmause);
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsPP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=distsPP(i2)/sumprob;
+            }
+            pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+            s2cellcand(i,l)=pick(0);
+            ScandX(0)=dSS(s2cellcand(i,l),0);
+            ScandY(0)=dSS(s2cellcand(i,l),1);
+            //backwards
+            sigmamean=mean(sigmause);
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsBP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=distsBP(i2)/sumprob;
+            }
+            MHratio=distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l));
             inbox(0)=TRUE;
+          }else{
+            ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
+            ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+            MHratio=1;
+            if(ACtype==2){
+              if(useverts==FALSE){
+                inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
+              }else{
+                inbox(0)=FALSE;
+                for(int p=0; p<polys; p++){
+                  inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+                  if(inbox2(0)){
+                    inbox(0)=TRUE;
+                  }
+                }
+              }
+            }else{//metamu2
+              inbox(0)=TRUE;
+            }
           }
           if(inbox(0)){
             //sum ll across j for each i and l
@@ -1382,10 +1603,13 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                   R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
             }
             rand=Rcpp::runif(1);
-            if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))){
+            if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*MHratio){
               s2(i,l,0)=ScandX(0);
               s2(i,l,1)=ScandY(0);
               ll_s2(i,l)=ll_s2_cand(i,l);
+              if(usedSS){
+                s2cell(i,l)=s2cellcand(i,l);
+              }
               if(primary(l)){
                 for(int j=0; j<Xidx(l); j++){
                   D(i,j,l) = dtmp(j,l);
@@ -1398,26 +1622,680 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
               }
             }
           }
-
         }
       }
+    }else if(ACtype==3|ACtype==6){//markov ACs
+      // Update within year ACs
+      for(int i=0; i<M; i++) {
+        for(int l=0; l<t; l++) {
+          if(usedSS){
+            sigmamean=mean(sigmause);
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsPP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=distsPP(i2)/sumprob;
+            }
+            pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+            s2cellcand(i,l)=pick(0);
+            ScandX(0)=dSS(s2cellcand(i,l),0);
+            ScandY(0)=dSS(s2cellcand(i,l),1);
+            //backwards
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigmamean*sigmamean));
+              sumprob+=distsBP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=distsBP(i2)/sumprob;
+            }
+            MHratio=distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l));
+            inbox(0)=TRUE;
+          }else{
+            ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
+            ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+            MHratio=1;
+            if(useverts==FALSE){
+              inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
+            }else{
+              inbox(0)=FALSE;
+              for(int p=0; p<polys; p++){
+                inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
+                if(inbox2(0)){
+                  inbox(0)=TRUE;
+                }
+              }
+            }
+          }
+          if(inbox(0)){
+            //sum ll across j for each i and l
+            llysum=0;
+            llycandsum=0;
+            if(primary(l)){
+              for(int j=0; j<Xidx(l); j++){
+                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                if(obstype==1){
+                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                }else{
+                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                }
+                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                  llycandsum+=ll_y_cand(i,j,l);
+                }
+                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                  llysum+=ll_y_curr(i,j,l);
+                }
+              }
+            }
+            lls2sum=0;
+            lls2candsum=0;
+            if(ACtype==3){
+              if(l==0){ //first occasion
+                //step from 1 to 2
+                if(useverts){
+                  ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                }else{
+                  ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                }
+                lls2sum+=ll_s2(i,0);
+                lls2candsum+=ll_s2_cand(i,0);
+              }else if((l>0)&(l<(t-1))){//middle occasions
+                if(useverts){
+                  //step from l-1 to l
+                  ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                  //step from l to l+1
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                }else{
+                  //step from l-1 to l
+                  ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                  //step from l to l+1
+                  ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                }
+                lls2sum+=ll_s2(i,l-1);
+                lls2sum+=ll_s2(i,l);
+                lls2candsum+=ll_s2_cand(i,l-1);
+                lls2candsum+=ll_s2_cand(i,l);
+              }else{//final occasion
+                //step from t-1 to t
+                if(useverts){
+                  ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                }else{
+                  ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                }
+                lls2sum+=ll_s2(i,l-1);
+                lls2candsum+=ll_s2_cand(i,l-1);
+              }
+            }else{//markov2
+              if(l==0){ //first occasion
+                //step from 1 to 2
+                sumprob=0;
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
+                  sumprob+=distsLL(i2);
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=distsLL(i2)/sumprob;
+                }
+                ll_s2_cand(i,0)=log(distsLL(s2cell(i,1)));
+                lls2sum+=ll_s2(i,0);
+                lls2candsum+=ll_s2_cand(i,0);
+              }else if((l>0)&(l<(t-1))){//middle occasions
+                //step from l-1 to l
+                sumprob=0;
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
+                  sumprob+=distsLL(i2);
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=distsLL(i2)/sumprob;
+                }
+                ll_s2_cand(i,l-1)=log(distsLL(s2cellcand(i,l)));
+                //step from l to l+1
+                sumprob=0;
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
+                  sumprob+=distsLL(i2);
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=distsLL(i2)/sumprob;
+                }
+                ll_s2_cand(i,l)= log(distsLL(s2cell(i,l+1)));
+                lls2sum+=ll_s2(i,l-1);
+                lls2sum+=ll_s2(i,l);
+                lls2candsum+=ll_s2_cand(i,l-1);
+                lls2candsum+=ll_s2_cand(i,l);
+              }else{//final occasion
+                //step from t-1 to t
+                sumprob=0;
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
+                  sumprob+=distsLL(i2);
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsLL(i2)=distsLL(i2)/sumprob;
+                }
+                ll_s2_cand(i,l-1)=log(distsLL(s2cellcand(i,l)));
+
+                lls2sum+=ll_s2(i,l-1);
+                lls2candsum+=ll_s2_cand(i,l-1);
+              }
+            }
+            rand=Rcpp::runif(1);
+            if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))*MHratio){
+              s2(i,l,0)=ScandX(0);
+              s2(i,l,1)=ScandY(0);
+              if(usedSS){
+                s2cell(i,l)=s2cellcand(i,l);
+              }
+              if(l==0){
+                ll_s2(i,0)=ll_s2_cand(i,0);
+              }else if((l>0)&(l<(t-1))){
+                ll_s2(i,l)=ll_s2_cand(i,l);
+                ll_s2(i,l-1)=ll_s2_cand(i,l-1);
+              }else{
+                ll_s2(i,l-1)=ll_s2_cand(i,l-1);
+              }
+              if(primary(l)){
+                for(int j=0; j<Xidx(l); j++){
+                  D(i,j,l) = dtmp(j,l);
+                  lamd(i,j,l) = lamdcand(i,j,l);
+                  if(obstype==1){
+                    pd(i,j,l) = pdcand(i,j,l);
+                  }
+                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    //dual AC up
+    if(dualACup){
+      if((iter+1) % propdualAC==0){
+        if(ACtype==1){//fixed
+          for(int i=0; i<M; i++) {
+            int skip=0;
+            for(int l=0; l<t; l++) {
+              skip+=knownmatrix(i,l);
+            }
+            if(skip==0){
+              currpatch=dSS(s1cell(i),3);
+              // forward probs
+              sumprob=0;
+              for(int i2=0; i2<NdSS; i2++) {
+                if(dSS(i2,3)!=currpatch){
+                  distsPP(i2)=exp((-distances(s1cell(i),i2)*distances(s1cell(i),i2))/(2*sigma(0)*sigma(0)));
+                  sumprob+=distsPP(i2);
+                }else{
+                  distsPP(i2)=0;
+                }
+              }
+              for(int i2=0; i2<NdSS;i2++){
+                distsPP(i2)=distsPP(i2)/sumprob;
+              }
+              //pick
+              pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+              s1cellcand(i)=pick(0);
+              ScandX(0)=dSS(s1cellcand(i),0);
+              ScandY(0)=dSS(s1cellcand(i),1);
+              backpatch=dSS(s1cellcand(i),2);
+              //backwards probs
+              sumprob=0;
+              for(int i2=0; i2<NdSS; i2++){
+                if(dSS(i2,3)!=backpatch){
+                 distsBP(i2)=exp((-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2))/(2*sigma(0)*sigma(0)));
+                  sumprob+=distsBP(i2);
+                }else{
+                  distsBP(i2)=0;
+                }
+              }
+              for(int i2=0; i2<NdSS;i2++){
+                distsBP(i2)=distsBP(i2)/sumprob;
+              }
+              //sum ll across j for each i and l
+              llysum=0;
+              llycandsum=0;
+              for(int l=0; l<t; l++){
+                if(primary(l)){
+                  for(int j=0; j<Xidx(l); j++){
+                    dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                    lamdcand(i,j,l)=lam0(0)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(0)*sigma(0)));
+                    if(obstype==1){
+                      pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                    }else{
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                    }
+                    if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                      llycandsum+=ll_y_cand(i,j,l);
+                    }
+                    if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                      llysum+=ll_y_curr(i,j,l);
+                    }
+                  }
+                }
+              }
+              rand=Rcpp::runif(1);
+              if((rand(0)<exp(llycandsum-llysum)*(distsBP(s1cell(i))/distsPP(s1cellcand(i))))){
+                s1(i,0)=ScandX(0);
+                s1(i,1)=ScandY(0);
+                s1cell(i)=s1cellcand(i);
+                for(int l=0; l<t; l++){
+                  s2(i,l,0)=ScandX(0);
+                  s2(i,l,1)=ScandY(0);
+                  if(primary(l)){
+                    for(int j=0; j<J; j++){
+                      D(i,j,l) = dtmp(j,l);
+                      lamd(i,j,l) = lamdcand(i,j,l);
+                      if(obstype==1){
+                        pd(i,j,l) = pdcand(i,j,l);
+                      }
+                      ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }else if(ACtype==4){//independent
+          for(int l=0; l<t; l++){
+            for(int i=0; i<M; i++) {
+              if(knownmatrix(i,l)==0){
+                currpatch=dSS(s2cell(i,l),3);
+                // forward probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++) {
+                  if(dSS(i2,3)!=currpatch){
+                    distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsPP(i2);
+                  }else{
+                    distsPP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsPP(i2)=distsPP(i2)/sumprob;
+                }
+                //pick
+                pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+                s2cellcand(i,l)=pick(0);
+                ScandX(0)=dSS(s2cellcand(i,l),0);
+                ScandY(0)=dSS(s2cellcand(i,l),1);
+                backpatch=dSS(s2cellcand(i,l),2);
+                //backwards probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++){
+                  if(dSS(i2,3)!=backpatch){
+                    distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsBP(i2);
+                  }else{
+                    distsBP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsBP(i2)=distsBP(i2)/sumprob;
+                }
+                //sum ll across j for each i and l
+                llysum=0;
+                llycandsum=0;
+                if(primary(l)){
+                  for(int j=0; j<Xidx(l); j++){
+                    dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                    lamdcand(i,j,l)=lam0(0)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigma(0)*sigma(0)));
+                    if(obstype==1){
+                      pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                    }else{
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                    }
+                    if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                      llycandsum+=ll_y_cand(i,j,l);
+                    }
+                    if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                      llysum+=ll_y_curr(i,j,l);
+                    }
+                  }
+                }
+                rand=Rcpp::runif(1);
+                if((rand(0)<exp(llycandsum-llysum)*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l))))){
+                  s2(i,l,0)=ScandX(0);
+                  s2(i,l,1)=ScandY(0);
+                  s2cell(i,l)=s2cellcand(i,l);
+                  if(primary(l)){
+                    for(int j=0; j<J; j++){
+                      D(i,j,l) = dtmp(j,l);
+                      lamd(i,j,l) = lamdcand(i,j,l);
+                      if(obstype==1){
+                        pd(i,j,l) = pdcand(i,j,l);
+                      }
+                      ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }else if((ACtype==2)|(ACtype==5)){//metamu or metamu2
+          for(int i=0; i<M; i++) {
+            for(int l=0; l<t; l++) {
+              if(knownmatrix(i,l)==0){
+                currpatch=dSS(s2cell(i,l),3);
+                // forward probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++) {
+                  if(dSS(i2,3)!=currpatch){
+                    distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsPP(i2);
+                  }else{
+                    distsPP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsPP(i2)=distsPP(i2)/sumprob;
+                }
+                //pick
+                pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+                s2cellcand(i,l)=pick(0);
+                ScandX(0)=dSS(s2cellcand(i,l),0);
+                ScandY(0)=dSS(s2cellcand(i,l),1);
+                backpatch=dSS(s2cellcand(i,l),2);
+                //backwards probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++){
+                  if(dSS(i2,3)!=backpatch){
+                    distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsBP(i2);
+                  }else{
+                    distsBP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsBP(i2)=distsBP(i2)/sumprob;
+                }
+                //sum ll across j for each i and l
+                llysum=0;
+                llycandsum=0;
+                lls2sum=0;
+                lls2candsum=0;
+                if(primary(l)){
+                  for(int j=0; j<Xidx(l); j++){
+                    dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                    lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                    pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                    if(obstype==1){
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                    }else{
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                    }
+                    if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                      llycandsum+=ll_y_cand(i,j,l);
+                    }
+                    if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                      llysum+=ll_y_curr(i,j,l);
+                    }
+                  }
+                }
+                if((ACtype==5)|((ACtype==2)&useverts)){
+                  ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s1(i,0),2.0)+pow(ScandY(0)-s1(i,1),2.0));
+                }else{//truncate
+                  ll_s2_cand(i,l)=log(R::dnorm(ScandX(0),s1(i,0),sigma_t(0),FALSE)/
+                    (R::pnorm(xlim(1),s1(i,0),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(xlim(0),s1(i,0),sigma_t(0),TRUE,FALSE)));
+                  ll_s2_cand(i,l)+=log(R::dnorm(ScandY(0),s1(i,1),sigma_t(0),FALSE)/
+                    (R::pnorm(ylim(1),s1(i,1),sigma_t(0),TRUE,FALSE)-
+                      R::pnorm(ylim(0),s1(i,1),sigma_t(0),TRUE,FALSE)));
+                }
+                rand=Rcpp::runif(1);
+                if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l)))){
+                  s2(i,l,0)=ScandX(0);
+                  s2(i,l,1)=ScandY(0);
+                  ll_s2(i,l)=ll_s2_cand(i,l);
+                  s2cell(i,l)=s2cellcand(i,l);
+                  if(primary(l)){
+                    for(int j=0; j<Xidx(l); j++){
+                      D(i,j,l) = dtmp(j,l);
+                      lamd(i,j,l) = lamdcand(i,j,l);
+                      if(obstype==1){
+                        pd(i,j,l) = pdcand(i,j,l);
+                      }
+                      ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }else if((ACtype==3)|(ACtype==6)){//markov or markov2
+          for(int i=0; i<M; i++) {
+            for(int l=0; l<t; l++) {
+              if(knownmatrix(i,l)==0){
+                currpatch=dSS(s2cell(i,l),3);
+                // forward probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++){
+                  if(dSS(i2,3)!=currpatch){
+                    distsPP(i2)=exp((-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsPP(i2);
+                  }else{
+                    distsPP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsPP(i2)=distsPP(i2)/sumprob;
+                }
+                //pick
+                pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+                s2cellcand(i,l)=pick(0);
+                ScandX(0)=dSS(s2cellcand(i,l),0);
+                ScandY(0)=dSS(s2cellcand(i,l),1);
+                backpatch=dSS(s2cellcand(i,l),2);
+                //backwards probs
+                sumprob=0;
+                for(int i2=0; i2<NdSS; i2++){
+                  if(dSS(i2,3)!=backpatch){
+                    distsBP(i2)=exp((-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2))/(2*sigma(0)*sigma(0)));
+                    sumprob+=distsBP(i2);
+                  }else{
+                    distsBP(i2)=0;
+                  }
+                }
+                for(int i2=0; i2<NdSS;i2++){
+                  distsBP(i2)=distsBP(i2)/sumprob;
+                }
+                //sum ll across j for each i and l
+                llysum=0;
+                llycandsum=0;
+                if(primary(l)){
+                  for(int j=0; j<Xidx(l); j++){
+                    dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
+                    lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
+                    if(obstype==1){
+                      pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
+                    }else{
+                      ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
+                    }
+                    if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
+                      llycandsum+=ll_y_cand(i,j,l);
+                    }
+                    if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
+                      llysum+=ll_y_curr(i,j,l);
+                    }
+                  }
+                }
+                lls2sum=0;
+                lls2candsum=0;
+                if(ACtype==3){
+                  if(l==0){ //first occasion
+                    //step from 1 to 2
+                    if(useverts){
+                      ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
+                    }else{
+                      ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,0);
+                    lls2candsum+=ll_s2_cand(i,0);
+                  }else if((l>0)&(l<(t-1))){//middle occasions
+                    if(useverts){
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
+                    }else{
+                      //step from l-1 to l
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                      //step from l to l+1
+                      ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2sum+=ll_s2(i,l);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l);
+                  }else{//final occasion
+                    //step from t-1 to t
+                    if(useverts){
+                      ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
+                    }else{
+                      ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
+                        (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
+                      ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
+                        (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
+                          R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
+                    }
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                  }
+                }else{//markov2
+                  if(l==0){ //first occasion
+                    //step from 1 to 2
+                    sumprob=0;
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
+                      sumprob+=distsLL(i2);
+                    }
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=distsLL(i2)/sumprob;
+                    }
+                    ll_s2_cand(i,0)=log(distsLL(s2cell(i,1)));
+                    lls2sum+=ll_s2(i,0);
+                    lls2candsum+=ll_s2_cand(i,0);
+                  }else if((l>0)&(l<(t-1))){//middle occasions
+                    //step from l-1 to l
+                    sumprob=0;
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
+                      sumprob+=distsLL(i2);
+                    }
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=distsLL(i2)/sumprob;
+                    }
+                    ll_s2_cand(i,l-1)=log(distsLL(s2cellcand(i,l)));
+                    //step from l to l+1
+                    sumprob=0;
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cellcand(i,l),i2))/(sigma_t(0)));
+                      sumprob+=distsLL(i2);
+                    }
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=distsLL(i2)/sumprob;
+                    }
+                    ll_s2_cand(i,l)= log(distsLL(s2cell(i,l+1)));
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2sum+=ll_s2(i,l);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l);
+                  }else{//final occasion
+                    //step from t-1 to t
+                    sumprob=0;
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=(1/sigma_t(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t(0)));
+                      sumprob+=distsLL(i2);
+                    }
+                    for(int i2=0; i2<NdSS;i2++){
+                      distsLL(i2)=distsLL(i2)/sumprob;
+                    }
+                    ll_s2_cand(i,l-1)=log(distsLL(s2cellcand(i,l)));
+
+                    lls2sum+=ll_s2(i,l-1);
+                    lls2candsum+=ll_s2_cand(i,l-1);
+                  }
+                }
+                rand=Rcpp::runif(1);
+                if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l)))){
+                  s2(i,l,0)=ScandX(0);
+                  s2(i,l,1)=ScandY(0);
+                  s2cell(i,l)=s2cellcand(i,l);
+                  if(l==0){
+                    ll_s2(i,0)=ll_s2_cand(i,0);
+                  }else if((l>0)&(l<(t-1))){
+                    ll_s2(i,l)=ll_s2_cand(i,l);
+                    ll_s2(i,l-1)=ll_s2_cand(i,l-1);
+                  }else{
+                    ll_s2(i,l-1)=ll_s2_cand(i,l-1);
+                  }
+                  if(primary(l)){
+                    for(int j=0; j<Xidx(l); j++){
+                      D(i,j,l) = dtmp(j,l);
+                      lamd(i,j,l) = lamdcand(i,j,l);
+                      if(obstype==1){
+                        pd(i,j,l) = pdcand(i,j,l);
+                      }
+                      ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    //update meta mus and sigma_ts
+    if((ACtype==2)|(ACtype==5)){//metamu
       // Update meta mus
       for(int i=0; i<M; i++) {
         ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
         ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
-        // if(usedSS){
-        //   double mindist=100000;
-        //   int idxdist=0;
-        //   for(int i2=0; i2<NdSS;i2++){
-        //     dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-        //     if(dists(i2)<mindist){
-        //       mindist=dists(i2);
-        //       idxdist=i2;
-        //     }
-        //   }
-        //   ScandX(0)=dSS(idxdist,0);
-        //   ScandY(0)=dSS(idxdist,1);
-        // }
         if(useverts==FALSE){
           inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
         }else{
@@ -1487,217 +2365,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           }
         }
       }
-    }else if(ACtype==1){//Stationary ACs
-      //Update Activity Centers
-      for(int i=0; i<M; i++) {
-        ScandX=Rcpp::rnorm(1,s1(i,0),props2x);
-        ScandY=Rcpp::rnorm(1,s1(i,1),props2y);
-        if(usedSS){
-          double mindist=100000;
-          int idxdist=0;
-          for(int i2=0; i2<NdSS;i2++){
-            dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-            if(dists(i2)<mindist){
-              mindist=dists(i2);
-              idxdist=i2;
-            }
-          }
-          ScandX(0)=dSS(idxdist,0);
-          ScandY(0)=dSS(idxdist,1);
-        }
-        if(useverts==FALSE){
-          inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
-        }else{
-          // inbox=inoutCppOpen(ScandX,ScandY,vertices);
-          inbox(0)=FALSE;
-          for(int p=0; p<polys; p++){
-            inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
-            if(inbox2(0)){
-              inbox(0)=TRUE;
-            }
-          }
-        }
-        if(inbox(0)){
-          //sum ll across j for each i and l
-          llysum=0;
-          llycandsum=0;
-          for(int l=0; l<t; l++){
-            if(primary(l)){
-              for(int j=0; j<Xidx(l); j++){
-                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-                if(obstype==1){
-                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-                }else{
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-                }
-                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                  llycandsum+=ll_y_cand(i,j,l);
-                }
-                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                  llysum+=ll_y_curr(i,j,l);
-                }
-              }
-            }
-          }
-          rand=Rcpp::runif(1);
-          if((rand(0)<exp(llycandsum-llysum))){
-            s1(i,0)=ScandX(0);
-            s1(i,1)=ScandY(0);
-            for(int l=0; l<t; l++){
-              s2(i,l,0)=ScandX(0);
-              s2(i,l,1)=ScandY(0);
-              if(primary(l)){
-                for(int j=0; j<J; j++){
-                  D(i,j,l) = dtmp(j,l);
-                  lamd(i,j,l) = lamdcand(i,j,l);
-                  if(obstype==1){
-                    pd(i,j,l) = pdcand(i,j,l);
-                  }
-                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
-                }
-              }
-            }
-          }
-        }
-      }
-    }else if(ACtype==3){//markov ACs
-      // Update within year ACs
-      for(int i=0; i<M; i++) {
-        for(int l=0; l<t; l++) {
-          ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
-          ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
-          if(usedSS){
-            double mindist=100000;
-            int idxdist=0;
-            for(int i2=0; i2<NdSS;i2++){
-              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-              if(dists(i2)<mindist){
-                mindist=dists(i2);
-                idxdist=i2;
-              }
-            }
-            ScandX(0)=dSS(idxdist,0);
-            ScandY(0)=dSS(idxdist,1);
-          }
-          if(useverts==FALSE){
-            inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
-          }else{
-            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            inbox(0)=FALSE;
-            for(int p=0; p<polys; p++){
-              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
-              if(inbox2(0)){
-                inbox(0)=TRUE;
-              }
-            }
-          }
-          if(inbox(0)){
-            //sum ll across j for each i and l
-            llysum=0;
-            llycandsum=0;
-            if(primary(l)){
-              for(int j=0; j<Xidx(l); j++){
-                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-                if(obstype==1){
-                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-                }else{
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-                }
-                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                  llycandsum+=ll_y_cand(i,j,l);
-                }
-                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                  llysum+=ll_y_curr(i,j,l);
-                }
-              }
-            }
-            lls2sum=0;
-            lls2candsum=0;
-            if(l==0){ //first occasion
-              //step from 1 to 2
-              if(useverts){
-                ll_s2_cand(i,0)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,1,0)-ScandX(0),2.0)+pow(s2(i,1,1)-ScandY(0),2.0));
-              }else{
-                ll_s2_cand(i,0)=log(R::dnorm(s2(i,1,0),ScandX(0),sigma_t(0),FALSE)/
-                  (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
-                ll_s2_cand(i,0)+=log(R::dnorm(s2(i,1,1),ScandY(0),sigma_t(0),FALSE)/
-                  (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
-              }
-              lls2sum+=ll_s2(i,0);
-              lls2candsum+=ll_s2_cand(i,0);
-            }else if((l>0)&(l<(t-1))){//middle occasions
-              if(useverts){
-              //step from l-1 to l
-              ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-              //step from l to l+1
-              ll_s2_cand(i,l)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(s2(i,l+1,0)-ScandX(0),2.0)+pow(s2(i,l+1,1)-ScandY(0),2.0));
-              }else{
-                //step from l-1 to l
-                ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
-                  (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
-                ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
-                  (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
-                //step from l to l+1
-                ll_s2_cand(i,l)=log(R::dnorm(s2(i,l+1,0),ScandX(0),sigma_t(0),FALSE)/
-                  (R::pnorm(xlim(1),ScandX(0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(xlim(0),ScandX(0),sigma_t(0),TRUE,FALSE)));
-                ll_s2_cand(i,l)+=log(R::dnorm(s2(i,l+1,1),ScandY(0),sigma_t(0),FALSE)/
-                  (R::pnorm(ylim(1),ScandY(0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(ylim(0),ScandY(0),sigma_t(0),TRUE,FALSE)));
-              }
-              lls2sum+=ll_s2(i,l-1);
-              lls2sum+=ll_s2(i,l);
-              lls2candsum+=ll_s2_cand(i,l-1);
-              lls2candsum+=ll_s2_cand(i,l);
-            }else{//final occasion
-              //step from t-1 to t
-              if(useverts){
-                ll_s2_cand(i,l-1)=-log(pow(sigma_t(0),2.0))-(1/(2*pow(sigma_t(0),2.0)))*(pow(ScandX(0)-s2(i,l-1,0),2.0)+pow(ScandY(0)-s2(i,l-1,1),2.0));
-              }else{
-                ll_s2_cand(i,l-1)=log(R::dnorm(ScandX(0),s2(i,l-1,0),sigma_t(0),FALSE)/
-                  (R::pnorm(xlim(1),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(xlim(0),s2(i,l-1,0),sigma_t(0),TRUE,FALSE)));
-                ll_s2_cand(i,l-1)+=log(R::dnorm(ScandY(0),s2(i,l-1,1),sigma_t(0),FALSE)/
-                  (R::pnorm(ylim(1),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)-
-                    R::pnorm(ylim(0),s2(i,l-1,1),sigma_t(0),TRUE,FALSE)));
-              }
-              lls2sum+=ll_s2(i,l-1);
-              lls2candsum+=ll_s2_cand(i,l-1);
-            }
-            rand=Rcpp::runif(1);
-            if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))){
-              s2(i,l,0)=ScandX(0);
-              s2(i,l,1)=ScandY(0);
-              if(l==0){
-                ll_s2(i,0)=ll_s2_cand(i,0);
-              }else if((l>0)&(l<(t-1))){
-                ll_s2(i,l)=ll_s2_cand(i,l);
-                ll_s2(i,l-1)=ll_s2_cand(i,l-1);
-              }else{
-                ll_s2(i,l-1)=ll_s2_cand(i,l-1);
-              }
-              if(primary(l)){
-                for(int j=0; j<Xidx(l); j++){
-                  D(i,j,l) = dtmp(j,l);
-                  lamd(i,j,l) = lamdcand(i,j,l);
-                  if(obstype==1){
-                    pd(i,j,l) = pdcand(i,j,l);
-                  }
-                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
-                }
-              }
-            }
-          }
-        }
-      }
+    }else if(ACtype==3){//markov
       // Update sigma_t
       sigma_t_cand=rnorm(1,sigma_t(0),propsigma_t);
       if(sigma_t_cand(0) > 0){
@@ -1729,79 +2397,37 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
           }
         }
       }
-    }else{//independent ACs
-      for(int l=0; l<t; l++){
-        for(int i=0; i<M; i++) {
-          ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
-          ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
-          if(usedSS){
-            double mindist=100000;
-            int idxdist=0;
+    }else if (ACtype==6){
+      sigma_t_cand=rnorm(1,sigma_t(0),propsigma_t);
+      if(sigma_t_cand(0) > 0){
+        lls2sum=0;
+        lls2candsum=0;
+        for(int l=1; l<t; l++){
+          for(int i=0; i<M; i++){ //X and Y normal log-likelihood simplified
+            sumprob=0;
             for(int i2=0; i2<NdSS;i2++){
-              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-              if(dists(i2)<mindist){
-                mindist=dists(i2);
-                idxdist=i2;
-              }
+              distsLL(i2)=(1/sigma_t_cand(0))*exp(-(distances(s2cell(i,l-1),i2))/(sigma_t_cand(0)));
+              sumprob+=distsLL(i2);
             }
-            ScandX(0)=dSS(idxdist,0);
-            ScandY(0)=dSS(idxdist,1);
+            for(int i2=0; i2<NdSS;i2++){
+              distsLL(i2)=distsLL(i2)/sumprob;
+            }
+            ll_s2_cand(i,l-1)=log(distsLL(s2cell(i,l)));
+            lls2sum+=ll_s2(i,l-1);
+            lls2candsum+=ll_s2_cand(i,l-1);
           }
-          if(useverts==FALSE){
-            inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
-          }else{
-            // inbox=inoutCppOpen(ScandX,ScandY,vertices);
-            inbox(0)=FALSE;
-            for(int p=0; p<polys; p++){
-              inbox2(0)=inoutCppOpen(ScandX,ScandY,vertices[p]);
-              if(inbox2(0)){
-                inbox(0)=TRUE;
-              }
-            }
-          }
-          if(inbox(0)){
-            //sum ll across j for each i and l
-            llysum=0;
-            llycandsum=0;
-            if(primary(l)){
-              for(int j=0; j<Xidx(l); j++){
-                dtmp(j,l)=pow( pow(ScandX(0) - Xcpp(l,j,0), 2.0) + pow(ScandY(0)-Xcpp(l,j,1), 2.0), 0.5 );
-                lamdcand(i,j,l)=lam0use(l)*exp(-dtmp(j,l)*dtmp(j,l)/(2*sigmause(l)*sigmause(l)));
-                if(obstype==1){
-                  pdcand(i,j,l)=1-exp(-lamdcand(i,j,l));
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(pdcand(i,j,l))+(tf(j,l)-y(i,j,l))*log(1-pdcand(i,j,l)));
-                }else{
-                  ll_y_cand(i,j,l)=z(i,l)*(y(i,j,l)*log(tf(j,l)*lamdcand(i,j,l))-tf(j,l)*lamdcand(i,j,l));
-                }
-                if(ll_y_cand(i,j,l)==ll_y_cand(i,j,l)){
-                  llycandsum+=ll_y_cand(i,j,l);
-                }
-                if(ll_y_curr(i,j,l)==ll_y_curr(i,j,l)){
-                  llysum+=ll_y_curr(i,j,l);
-                }
-              }
-            }
-            rand=Rcpp::runif(1);
-            if((rand(0)<exp(llycandsum-llysum))){
-              s2(i,l,0)=ScandX(0);
-              s2(i,l,1)=ScandY(0);
-              if(primary(l)){
-                for(int j=0; j<J; j++){
-                  D(i,j,l) = dtmp(j,l);
-                  lamd(i,j,l) = lamdcand(i,j,l);
-                  if(obstype==1){
-                    pd(i,j,l) = pdcand(i,j,l);
-                  }
-                  ll_y_curr(i,j,l) = ll_y_cand(i,j,l);
-                }
-              }
+        }
+        rand=Rcpp::runif(1);
+        if(rand(0) < exp(lls2candsum - lls2sum)) {
+          sigma_t(0)=sigma_t_cand(0);
+          for(int i=0; i<M; i++) {
+            for(int l=1; l<t; l++) {
+              ll_s2(i,l-1)=ll_s2_cand(i,l-1);
             }
           }
         }
       }
     }
-
-
 
     //Record output ll_y_curr.subcube(i,0,0,i,maxJ-1,0) s2yout(nstore,M,t)
     if(((iter+1)>nburn)&((iter+1) % nthin==0)){
@@ -1840,7 +2466,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
         out(iteridx,idx)=N(l);
         idx=idx+1;
       }
-      if((ACtype==2)|(ACtype==3)|(ACtype==5)){
+      if((ACtype==2)|(ACtype==3)|(ACtype==5)|(ACtype==6)){
         out(iteridx,idx)=sigma_t(0);
         idx=idx+1;
       }
@@ -3599,21 +4225,41 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
       if(ACtype==1){//Stationary ACs
         //Update Activity Centers
         for(int i=0; i<M; i++) {
-          ScandX=Rcpp::rnorm(1,s1(i,0),props2x);
-          ScandY=Rcpp::rnorm(1,s1(i,1),props2y);
           if(usedSS){
-            double mindist=100000;
+            sumprob=0;
             for(int i2=0; i2<NdSS;i2++){
-              dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-              if(dists(i2)<mindist){
-                mindist=dists(i2);
-                s1cellcand(i)=i2;
+              if(sex(i)==1){
+                distsPP(i2)=exp(-distances(s1cell(i),i2)*distances(s1cell(i),i2)/(2*sigma(0)*sigma(0)));
+              }else{
+                distsPP(i2)=exp(-distances(s1cell(i),i2)*distances(s1cell(i),i2)/(2*sigma(1)*sigma(1)));
               }
+              sumprob+=distsPP(i2);
             }
+            for(int i2=0; i2<NdSS;i2++){
+              distsPP(i2)=distsPP(i2)/sumprob;
+            }
+            pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+            s1cellcand(i)=pick(0);
             ScandX(0)=dSS(s1cellcand(i),0);
             ScandY(0)=dSS(s1cellcand(i),1);
+            //backwards
+            sumprob=0;
+            for(int i2=0; i2<NdSS;i2++){
+              if(sex(i)==1){
+                distsBP(i2)=exp(-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2)/(2*sigma(0)*sigma(0)));
+              }else{
+                distsBP(i2)=exp(-distances(s1cellcand(i),i2)*distances(s1cellcand(i),i2)/(2*sigma(1)*sigma(1)));
+              }
+              sumprob+=distsBP(i2);
+            }
+            for(int i2=0; i2<NdSS;i2++){
+              distsBP(i2)=distsBP(i2)/sumprob;
+            }
+            MHratio=distsBP(s1cell(i))/distsPP(s1cellcand(i));
             inbox(0)=TRUE;
           }else{
+            ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
+            ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
             if(useverts==FALSE){
               inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
             }else{
@@ -3681,21 +4327,53 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
       }else if (ACtype==4){//independent ACs
         for(int l=0; l<t; l++){
           for(int i=0; i<M; i++) {
-            ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
-            ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
             if(usedSS){
-              double mindist=100000;
+              // double mindist=100000;
+              // for(int i2=0; i2<NdSS;i2++){
+              //   dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
+              //   if(dists(i2)<mindist){
+              //     mindist=dists(i2);
+              //     s2cellcand(i,l)=i2;
+              //   }
+              // }
+              // ScandX(0)=dSS(s2cellcand(i,l),0);
+              // ScandY(0)=dSS(s2cellcand(i,l),1);
+              // inbox(0)=TRUE;
+              sumprob=0;
               for(int i2=0; i2<NdSS;i2++){
-                dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-                if(dists(i2)<mindist){
-                  mindist=dists(i2);
-                  s2cellcand(i,l)=i2;
+                // dists(i2)=pow(pow(s2(i,l,0)-dSS(i2,0),2)+pow(s2(i,l,1)-dSS(i2,1),2),0.5);
+                if(sex(i)==1){
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(0)*sigma(0)));
+                }else{
+                  distsPP(i2)=exp(-distances(s2cell(i,l),i2)*distances(s2cell(i,l),i2)/(2*sigma(1)*sigma(1)));
                 }
+                sumprob+=distsPP(i2);
               }
+              for(int i2=0; i2<NdSS;i2++){
+                distsPP(i2)=distsPP(i2)/sumprob;
+              }
+              pick=Rcpp::RcppArmadillo::sample(chooseS,1,FALSE,distsPP);
+              s2cellcand(i,l)=pick(0);
               ScandX(0)=dSS(s2cellcand(i,l),0);
               ScandY(0)=dSS(s2cellcand(i,l),1);
+              //backwards
+              sumprob=0;
+              for(int i2=0; i2<NdSS;i2++){
+                if(sex(i)==1){
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(0)*sigma(0)));
+                }else{
+                  distsBP(i2)=exp(-distances(s2cellcand(i,l),i2)*distances(s2cellcand(i,l),i2)/(2*sigma(1)*sigma(1)));
+                }
+                sumprob+=distsBP(i2);
+              }
+              for(int i2=0; i2<NdSS;i2++){
+                distsBP(i2)=distsBP(i2)/sumprob;
+              }
+              MHratio=distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l));
               inbox(0)=TRUE;
             }else{
+              ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
+              ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
               if(useverts==FALSE){
                 inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
               }else{
@@ -3736,7 +4414,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                 }
               }
               rand=Rcpp::runif(1);
-              if((rand(0)<exp(llycandsum-llysum))){
+              if((rand(0)<exp(llycandsum-llysum)*MHratio)){
                 s2(i,l,0)=ScandX(0);
                 s2(i,l,1)=ScandY(0);
                 if(usedSS){
@@ -4360,7 +5038,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                     }
                   }
                   rand=Rcpp::runif(1);
-                  if((rand(0)<exp(llycandsum-llysum)*(distsBP(s1cell(i))/distsPP(s1cellcand(i))))){
+                  if((rand(0)<exp(llycandsum-llysum)*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l))))){
                     s2(i,l,0)=ScandX(0);
                     s2(i,l,1)=ScandY(0);
                     s2cell(i,l)=s2cellcand(i,l);
@@ -4472,7 +5150,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                     }
                   }
                   rand=Rcpp::runif(1);
-                  if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*(distsBP(s1cell(i))/distsPP(s1cellcand(i)))){
+                  if(rand(0)<exp((llycandsum+ll_s2_cand(i,l))-(llysum+ll_s2(i,l)))*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l)))){
                     s2(i,l,0)=ScandX(0);
                     s2(i,l,1)=ScandY(0);
                     ll_s2(i,l)=ll_s2_cand(i,l);
@@ -4755,7 +5433,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                     }
                   }
                   rand=Rcpp::runif(1);
-                  if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))*(distsBP(s1cell(i))/distsPP(s1cellcand(i)))){
+                  if(rand(0)<exp((llycandsum+lls2candsum)-(llysum+lls2sum))*(distsBP(s2cell(i,l))/distsPP(s2cellcand(i,l)))){
                     s2(i,l,0)=ScandX(0);
                     s2(i,l,1)=ScandY(0);
                     s2cell(i,l)=s2cellcand(i,l);
@@ -4938,19 +5616,6 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         for(int i=0; i<M; i++) {
           ScandX=Rcpp::rnorm(1,s1(i,0),props1x);
           ScandY=Rcpp::rnorm(1,s1(i,1),props1y);
-          // if(usedSS){
-          //   double mindist=100000;
-          //   int idxdist=0;
-          //   for(int i2=0; i2<NdSS;i2++){
-          //     dists(i2)=pow(pow(ScandX(0)-dSS(i2,0),2)+pow(ScandY(0)-dSS(i2,1),2),0.5);
-          //     if(dists(i2)<mindist){
-          //       mindist=dists(i2);
-          //       idxdist=i2;
-          //     }
-          //   }
-          //   ScandX(0)=dSS(idxdist,0);
-          //   ScandY(0)=dSS(idxdist,1);
-          // }
           if(useverts==FALSE){
             inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
           }else{

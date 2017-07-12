@@ -2,118 +2,149 @@
 % Please edit documentation in R/mcmc.OpenSCR.R
 \name{mcmc.OpenSCR}
 \alias{mcmc.OpenSCR}
-\title{Run MCMC algorithm for Open population SCR model.}
+\title{Run MCMC algorithm for fixed parameter or primary period-specific parameter open population SCR model.}
 \usage{
 mcmc.OpenSCR(data, niter = 1000, nburn = 0, nthin = 1, K = NA, M = NA,
   inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
-  Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA)
+  Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
+  dualACup = FALSE)
 }
 \arguments{
-\item{data}{a list produced by simOpenSCR or in the same format}
+\item{data}{a list produced by simOpenSCR or in the same format.  See description.}
 
-\item{niter}{number of MCMC iterations to run}
+\item{niter}{an integer indicating the number of MCMC iterations to run}
 
-\item{nburn}{number of MCMC iterations to discard as burn in}
+\item{nburn}{an integer indicating the number of MCMC iterations to discard as burn in}
 
-\item{nthin}{MCMC thinning parameter. Record output on every nthin iterations.  nthin=1 corresponds to no thinning}
+\item{nthin}{an integer indicating the MCMC thinning parameter. Record output on every nthin iterations.  nthin=1 corresponds to no thinning}
 
-\item{M}{The size of the augmented superpopulation}
+\item{M}{an integer indicating the size of the augmented superpopulation.  M should be much larger than then
+number of individuals alive across all primary periods.}
 
-\item{inits}{a list of user-supplied initial values.}
+\item{inits}{a list of user-supplied starting values with elements for lam0, sigma, gamma, phi, psi,
+and sigma_t (if using a structure movement model).}
 
-\item{proppars}{a list of tuning parameters for the proposal distributions}
+\item{proppars}{a list of tuning parameters for the proposal distributions with elements for lam0, sigma, gamma,
+s1x, s2y (for fixed and metamu models), s2x, s2y (for independent, markov, and metamu models), sex, and sigma_t (if using a structured movement model).}
 
 \item{jointZ}{a logical indicating whether you want to use the sequential or joint z update.}
 
-\item{keepACs}{a logical indicating whether or not to keep the posteriors for z, s}
+\item{keepACs}{a logical indicating whether or not to keep the posteriors for z, s1, and s2}
 
 \item{Rcpp}{a logical indicating whether or not to use Rcpp}
 
-\item{ACtype}{a character indicating the model for between year activity center dependence. 'fixed' assumes activity centers are uniformly
-distributed across the state space and do not move between years.  'independent" assumes activity centers for each year are uniformly
-distributed across the state space, implying no dependence of activity centers between years. "markov" assumes activity centers in the
-first year are uniformly distributed across the state space and activity centers in year l is a bivariate normal draw from N(s_{i,l-1},sigma_t).
-"metamu" assumes animals have meta activity centers which are distributed uniformly across the landscape and the realized yearly activity
-centers are a bivariate normal draw from N(mu_i,sigma_t), but must stay in the state space.  "metamu2" enforces the metamus to stay in
-the state space, but the yearly ACs may leave.}
+\item{ACtype}{A character indicating the type of activity centers.  "fixed" activity centers do not move between primary periods, "metamu" assumes there is a
+meta activity center around which the primary period activity centers distributed following a bivariate normal distribution
+with spatial scale parameter sigma_t.  Primary period activity centers are required to stay inside the state space.
+"metamu2" is identical to "metamu" except primary period activity centers are allowed to leave the state space.
+ markov" assumes activity centers in primary period 1 are distributed uniformly across the state space and the
+ activy centers in primary period l+1 are a bivariate normal draw centered around the activity center in
+ primary period l (but must stay within the state space).  "markov2" is the same as "markov" except each
+ dispersal considers the available distances to disperse to in a use vs. availability framework. Discrete
+ state space is required.  Finally, "independent" assumes animals randomly mix between primary periods.
+ (spatial uniformity in all primary periods with independence between primary periods).
+
+ The "metamu" and "markov" models are truncated on rectangular state spaces.  This is required to estimate
+ sigma_t and to a lesser degree, the Ns without bias.  If using a polygon state space, the "metamu2" model
+ will provide unbiased estimates.  If using a polygon state space with a Markov model, switching to a discrete
+ state space and ACype="markov2" will provide unbiased estimates.}
 
 \item{obstype}{a character indicating the observation model "bernoulli" or "poisson"}
 
-\item{dSS}{a discrete state space that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations}
+\item{dSS}{an optional (N_SS x 2) matrix for a discrete state space locations that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations}
+
+\item{dualACup}{a logical to be used with discrete state spaces indicating whether a second, interpatch activity
+center proposal is used.  Currently under development--probably should not use.}
+
+\item{primary}{a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.}
 }
 \value{
 a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
-s1 being meta ACs and s2 being yearly ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
+s1 being meta ACs and s2 being primary period ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
 of dimension niter x M x T
 }
 \description{
-This function runs the MCMC algorithm for an open population SCR model.  The data list should have the following elements:
-1.  y, a n x J x T capture history where J is the maximum number of traps across years, T is the number of years, and n
-is the number of animals captured
-2.  X,  a list with elements that consists of a matrix with the X and Y trap locations in the first two columns for each year.
-If the traps do not vary across years, just repeat the same traps in each year
-3.  K, a vector of size T indicating how many capture occasions there were in each year
-4.  J, a vector of size T indicating how many traps there were in each year
+This function runs an MCMC algorithm for an open population SCR model.  The data list should have the following elements:
+1.  y, a n x maxJ x T capture history where maxJ is the maximum number of traps across primary periods, T is the number of primary periods, and n
+is the number of animals captured.  If population was not observed in primary period l, enter all zeros
+2.  X,  a list with elements that consists of J[l] x 2 matrices housing the X and Y trap locations for each primary period, l.
+If the traps do not vary across primary periods, just repeat the same traps in each list element. If population was not
+observed in primary period l, enter NA instead of a matrix
+3.  K, a vector of size T indicating how many capture occasions there were in each primary period. If population
+was not observed in primary period l, enter NA
+4.  J, a vector of size T indicating how many traps there were in each primary period.  If population was not
+observed in primary period l, enter NA
 5. either buff or vertices.  buff is the fixed buffer for the traps to produce the state space.  It is applied to the minimum and maximum
-X and Y trap locations across years, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
+X and Y trap locations across primary periods, producing a square or rectangular state space.  vertices is a *list* of matrices with the X and Y coordinates
 of a polygonal state space with one polygon in each list element.  If there is just one polygon, the list is of length 1.
 If there are many polygons separated by large distances, you should think about the implications of activity centers
-possibly being stuck inside the polygons.
+possibly being stuck inside the polygons and check the activity center posteriors to see if this is happening.
 6. tf is an optional list of vectors of length T containing the trap operation information.  Each vector has one element for each trap
-and indicates how many occasions each trap was operational.
+and indicates how many occasions each trap was operational in that primary period.
+7. primary is an optional a vector of length T with entries 1 if the population is to be observed in primary period l and 0 otherwise.
 
-inits sets the initial values and determines if parameters are fixed or year-specific. It must have elements "lam0"
-"sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a bivariate normal or Markov mobile
+inits sets the initial values and determines if parameters are fixed or primary period-specific. It must have elements "lam0"
+"sigma", "gamma", "phi", and "psi".  If there is an element "sigma_t", the parameters of a "meta mu" or Markov mobile
 activity center model will be estimated.  If length(lam0)=1, a single lam0 will be estimated while if length(lam0)=t,
-lam0 will be year-specific.  This goes for sigma, gamma, and phi as well, except for gamma and phi length needs to be t-1
-or year-specific paramters.  A decent starting value for psi is (hypothesized) N/M.
+lam0 will be primary period-specific.  This goes for sigma, gamma, and phi as well, except for gamma and phi length needs to be t-1
+for between primary period-specific parameters.  A decent starting value for psi is (hypothesized) N/M.
 
 proppars is a list containing the tuning parameters for the parameters that use a Metropolis-Hastings update.
-It must have elemnts "lam0", "sigma", "gamma", "s2x", "s2y", and "propz" (if jointZ=FALSE). If a parameter is year-specific, it needs
-the appropriate number of proppars. propz is the number of data augmentation z's to update in years 2,...,t, so it should
-be of length t-1.  Increasing propz improves mixing (up to a point) but increases computation time. Finally, if you set
-an initial value for sigma_t, you need to provide proppars for "s1x", "s1y", and "sigma_t".
+It must have elements "lam0", "sigma", "gamma", "s1x", "s1y", s2x", "s2y", and "propz" (if jointZ=FALSE). If a parameter is primary period-specific, it needs
+the appropriate number of proppars. propz is the number of data augmentation z's to update in primary periods 2,...,t, so it should
+be of length t-1.  Increasing propz improves mixing (up to a point) but increases computation time. If you set
+an initial value for sigma_t, you need to provide proppars for sigma_t".  Finally, proppars$s1x
+and proppars$s1y tune fixed activity centers or the meta mus and proppars$s2x and proppars$s2y tune primary period
+activity centers.
 
 A note on the z samplers.  jointZ=TRUE will update all the z's for each individual at the same time while jointZ=FALSE
 will update them sequentially.  For T=3-6ish, you get a greater effective sample size per unit time with the joint update than with the sequential update.
-The joint update always mixes better, but takes longer as t increases.
+The joint update always mixes better, but takes longer as T increases.  It must calculate the likelihood for all possible
+z histories for a given T on each update.
 
-A note on the activity center models. I think little is known about data requirements for the more complex models at this point or
-how consequential it is to hold them fixed when they do indeed move between years.  Anectodally, the "metamu" and "markov" models
-underestimate sigma_t because they force yearly activity centers to remain in the state space.  "metamu2" lets the yearly
-ACs leave the state space, but they are still associated with the metamus that stay in the state space.  One could let the ACs
-leave the state space in the Markov model, but then density would decrease through time, which seems problematic.  The
-metamu2 model seems most sensible to me.  Email me if you have any other sensible models.
+A note on Rcpp.  I've seen speed gains of 3-7x so far using Rcpp, but this improvement appears to be much reduced
+when switching to discrete state spaces where R has a fast vectorized operation for the majority of the calculations
+used in this update.
+
+A note on discrete state spaces.  Currently, only contiguous discrete state spaces are supported, or state spaces with only
+small gaps between patches.  If using a complicated discrete state space, the activity centers may get stuck in patches
+in which they were initilized.  To see if the current algorithms work, you should run several chains starting at different
+values of sigma_t and see if they converge.  A better algorithm is in the works.
 
 A final note on splitting data sets to get group-specific parameters (e.g. sex).  This will alter the interpretation
-of per capita recruitment.  For example, if you run sexes separetly, you are estimating recruitment per number
+of per capita recruitment.  For example, if you run sexes separatly, you are estimating recruitment per number
 of males or females in the population, which probably does not make sense.  See the mcmc.OpenSCR() function for
 sex-specific parameters.
 }
 \examples{
 \dontrun{
 library(coda)
-#2 years of data,  all parameters fixed, stationary activity centers
+#You'll need to run all these examples longer for convergence and inference.
+#2 primary periods of data,  all parameters fixed, fixed activity centers (default setting)
 t=2
 N=100
 p0=0.5
-lam0=-log(1-p0)
-sigma=0.750
+lam0=-log(1-p0) #because we're using the hazard half-normal detection function
+sigma=0.75
 phi=0.8
 gamma=0.3
-buff=2
-X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Trap XY can vary across years
-K=c(10,10) #Number of occasions can vary across years as well
+buff=3 #trap buffer to define state space
+X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Trap XY can vary across primary periods
+K=c(10,10) #Number of occasions can vary across primary periods as well
 M=250
 #Simulate some data
 data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
-inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M) #Single initial values for a parameter will estimate a single parameter across years
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M) #Single initial values for a parameter will estimate a single parameter across primary periods
 niter=1000
 nburn=0
 nthin=1
-proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s2x=0.2,s2y=0.2,propz=c(30)) #The number of proppars must match the number of initial values
-out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,Rcpp=TRUE)
+proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2)#No proppars$propz because using default jointZ=TRUE
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars)
 plot(mcmc(out$out))
+summary(mcmc(out$out))
+#Note, realized N for primary periods>1 will vary if simulating using gamma.
+data$N
 
 #same but t=3
 t=3
@@ -123,21 +154,22 @@ lam0=-log(1-p0)
 sigma=0.750
 phi=0.7
 gamma=0.3
-buff=2
+buff=3
 X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Note we need 3 trap objects stuffed into the trap list
-K=c(10,10,10) #and 3 numbers of occasions within year
+K=c(10,10,10) #and 3 numbers of occasions within primary period
 M=425
 data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
 inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M)
 niter=1000
 nburn=0
 nthin=1
-proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s2x=0.2,s2y=0.2,propz=c(30,30)) #Need 1 more propz
-out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,Rcpp=TRUE)
+proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2)
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars)
 plot(mcmc(out$out))
 summary(mcmc(out$out))
+data$N
 
-#Now detection function varies by year
+#Now detection function varies by primary period
 t=3
 N=100
 p0=c(0.4,0.5,0.6) #need 3 of these
@@ -145,19 +177,22 @@ lam0=-log(1-p0)
 sigma=c(0.75,0.65,0.55) #these, too
 phi=0.7
 gamma=0.3
-buff=2
-X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Note we need 3 trap objects stuffed into the trap list
-K=c(10,10,10) #and 3 numbers of occasions within year
+buff=3
+X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9))
+K=c(10,10,10)
 M=425
 data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
+#Starting at simulated values gives 3 lam0 and sigma starting values
 inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M) #Note now 3 initial values are specivied here
 niter=1000
 nburn=0
 nthin=1
-proppars=list(lam0=rep(0.025,3),sigma=rep(0.025,3),gamma=0.1,phi=0.1,s2x=0.2,s2y=0.2,propz=c(30,30)) #Note we need 3 proppars for lam0 and sigma
-out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,Rcpp=TRUE)
+#Now we need 3 proppars for lam0 and sigma
+proppars=list(lam0=rep(0.025,3),sigma=rep(0.025,3),gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2)
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars)
 plot(mcmc(out$out))
 summary(mcmc(out$out))
+data$N
 
 #Let's set lam0 and sigma back to fixed and vary gamma and phi
 t=3
@@ -165,24 +200,27 @@ N=100
 p0=0.5
 lam0=-log(1-p0)
 sigma=0.750
-phi=c(0.7,0.8)
+phi=c(0.7,0.8) #3 primary periods allows for 2 periods for population dynamics
 gamma=c(0.2,0.3)
 buff=2
-X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9)) #Note we need 3 trap objects stuffed into the trap list
-K=c(10,10,10) #and 3 numbers of occasions within year
+X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9))
+K=c(10,10,10)
 M=425 #Not sure if this is still enough...
 data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,obstype="bernoulli")
 inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M) #now phi and gamma are getting 2 inits
 niter=1000
 nburn=0
 nthin=1
-proppars=list(lam0=0.025,sigma=0.025,gamma=c(0.1,0.1),phi=c(0.1,0.1),s2x=0.2,s2y=0.2,propz=c(30,30)) #and phi and gamma get 2 proppars
-out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,Rcpp=TRUE)
+#phi and gamma get 2 proppars
+proppars=list(lam0=0.025,sigma=0.025,gamma=c(0.1,0.1),phi=c(0.1,0.1),s1x=0.2,s1y=0.2)
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars)
 plot(mcmc(out$out))
 summary(mcmc(out$out))
+data$N
 
-#Let's set everything back to fixed and do mobile activty centers between years
-#We're using a bivariate normal "metamu2" model.
+#Let's set everything back to fixed and do mobile activity centers between primary periods
+#We're using a bivariate normal "metamu" model which is truncated because we are using
+a rectangular state space.
 t=3
 N=100
 p0=0.5
@@ -190,22 +228,28 @@ lam0=-log(1-p0)
 sigma=0.750
 sigma_t=0.7
 #We'll use this to simulate mobile activity centers
-ACtype="metamu2"
+ACtype="metamu"
 phi=0.7
 gamma=0.3
 buff=4 #increase buffer to not constrain movement as much
 X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9))
-K=c(10,10,10) #and 3 numbers of occasions within year
+K=c(10,10,10)
 M=425
-data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,sigma_t=sigma_t,K=K,X=X,t=t,M=M,buff=buff,ACtype=ACtype)#Note, we're putting sigma_t in now
-inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M,sigma_t=sigma_t)#Need an init for sigma_t
+#Note, we're putting sigma_t in now
+data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,sigma_t=sigma_t,K=K,X=X,t=t,M=M,buff=buff,
+ACtype=ACtype)
+#Need an init for sigma_t
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M,sigma_t=sigma_t)
 niter=1000
 nburn=0
 nthin=1
-proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.05,s1y=0.05,s2x=0.2,s2y=0.2,propz=c(30,30),sigma_t=0.025) #Note there is a proppar for sigma_t and the meta mus
+#Note there is a proppar for sigma_t, the meta mus (s1) and primary period activity centers (s2)
+proppars=list(lam0=0.055,sigma=0.025,gamma=0.15,phi=0.1,s1x=0.5,s1y=0.5,s2x=0.4,s2y=0.4,sigma_t=0.04)
 out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,ACtype=ACtype)
 plot(mcmc(out$out))
 summary(mcmc(out$out))
+data$N
+
 #Let's look at some activity centers
 par(mfrow=c(1,1))
 par(ask=FALSE)
@@ -231,29 +275,123 @@ effectiveSize(mcmc(out$out))
 1-rejectionRate(mcmc(out$out))
 #We can't adjust the sampler for N other than switching from the joint to the sequential sampler
 #and since we use a Gibbs update for phi, we can't adjust that.  But we can adjust the proppars
-#for lam0, sigma, gamma, and sigma_t.  Here, we're accepting too much, so we should make the proppars
-#larger.  But what about the activity centers?  Here, we look at the acceptance rates for the yearly
-#ACs in year 1.  Note, they will be identical for the x and y dimension
+#for lam0, sigma, gamma, and sigma_t.  Here, everything looks good because I've already adjusted the
+tuning parameters.
+
+But what about the activity center acceptance?  Here, we look at the acceptance rates for the primary period
+#ACs in primary period 1.  Note, they will be identical for the x and y dimension
 1-rejectionRate(mcmc(out$s2xout[,,1]))
-#It looks like we need to raise the proppars for the yearly ACs. Now for the meta mus.
+#You'll want to focus on the individuals that were actually captured in this primary period
+(generally towards the beginning). You can also look at the other primary periods. I think you should aim for
+no acceptance rates less than 0.2. Inevitabely, the primary period activity centers for individuals not captured
+in a given year will have high acceptance rates.
+
+Now for the meta mus.
 1-rejectionRate(mcmc(out$s1xout))
-#We definitely need to raise their proppars! So we can do short runs (say of length 500) starting at
-#inits close to the converged values to assess and adjust the tuning parameters until we're seeing
-#acceptance rates near 23\% and then run a chain long enough to get an acceptable effective
-#sample size for all parameters 9(but usually the N's are the limiting factor).  If at any point a
-#parameter is not updating, the tuning parameter is probably too large.
-summary(mcmc(out$out))
+#These look OK, but we could probably raise the tuning parameters a bit.
+
+#So we can do short runs (say of length 500) to assess and adjust the tuning parameters until we're seeing
+#acceptance rates in the 20-40\% range and then run a chain long enough to get an acceptable effective
+#sample size for all parameters (but usually the N's are the limiting factor or sigma_t if in the model).
+#If at any point a parameter is not updating, the tuning parameter is probably too large.  Ideally, you will
+run multiple chains with some variation in starting values, especially sigma_t if it's in the model.
 
 #So which point estimates and credible intervals should we use?  I've found the posterior mode
 #to be the closest to unbiased point estimator, with the posterior median being pretty good, too.
 #I would not use the posterior mean, especially for N. Here is a function to get the mode.
 library(mcmcGLMM)
-#posterior.mode(mcmc(out$out))
+posterior.mode(mcmc(out$out))
 #You can get the posterior means, modes, and quantile credible intervals using coda's summary
 summary(mcmc(out$out))
 #Note the 2.5\% and 97.5\% quantiles can be used as the credible interval limits.  However, I've found
 #the highest posteior density intervals to have slightly better frequentist coverage. coda will do that for you
 HPDinterval(mcmc(out$out))
+
+#Some more model types:
+#Here is a markov example
+t=3
+N=100
+p0=0.5
+lam0=-log(1-p0)
+sigma=0.750
+sigma_t=0.7
+#We'll use this to simulate mobile activity centers
+ACtype="markov"
+phi=0.7
+gamma=0.3
+buff=4 #increase buffer to not constrain movement as much
+X=list(expand.grid(4:9,4:9),expand.grid(4:9,4:9),expand.grid(4:9,4:9))
+K=c(10,10,10)
+M=425
+#Note, we're putting sigma_t in now
+data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,sigma_t=sigma_t,K=K,X=X,t=t,M=M,buff=buff,
+ACtype=ACtype)
+#Need an init for sigma_t
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M,sigma_t=sigma_t)
+niter=1000
+nburn=0
+nthin=1
+#Note there is only proppars for primary period activity centers (s2; no meta mus).
+proppars=list(lam0=0.055,sigma=0.025,gamma=0.15,phi=0.1,s2x=0.2,s2y=0.2,sigma_t=0.04)
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,ACtype=ACtype)
+plot(mcmc(out$out))
+summary(mcmc(out$out))
+data$N
+
+#Here is a discrete state space example with ACtype="markov2"
+t=3
+N=50
+p0=0.3
+lam0=-log(1-p0)
+sigma=1
+sigma_t=1 #dispersal sigma
+phi=0.7
+gamma=0.3
+buff=2
+X=list(expand.grid(4:11,4:11),expand.grid(4:11,4:11),expand.grid(4:11,4:11))
+K=c(10,10,10)
+M=125
+ACtype="markov2"
+obstype="poisson"
+dSS=expand.grid(seq(2,13,0.25),seq(2,13,0.25)) #here is the discrete state space
+plot(dSS)
+data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,sigma_t=sigma_t,K=K,X=X,t=t,M=M,buff=buff,
+               ACtype=ACtype,obstype=obstype,dSS=dSS)
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M,sigma_t=sigma_t)
+niter=1000
+nburn=0
+nthin=1
+proppars=list(lam0=0.01,sigma=0.02,gamma=0.1,s2x=0.2,s2y=0.2,sigma_t=0.09)
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,
+                proppars=proppars,ACtype=ACtype,obstype=obstype,dSS=dSS)
+plot(mcmc(out$out))
+
+#Here is the second example with t=3, but the population is not observed in year 2
+t=3
+N=100
+p0=0.5
+lam0=-log(1-p0)
+sigma=0.750
+phi=0.7
+gamma=0.3
+buff=3
+#Note, there are no traps or K on occasion 2
+X=list(expand.grid(4:9,4:9),NA,expand.grid(4:9,4:9))
+K=c(10,NA,10)
+M=425
+primary=c(1,0,1) #primary period 2 not observed
+data=simOpenSCR(N=N,phi=phi,gamma=gamma,lam0=lam0,sigma=sigma,K=K,X=X,t=t,M=M,buff=buff,
+obstype="bernoulli",primary=primary)
+inits=list(lam0=lam0,sigma=sigma,gamma=gamma,phi=phi,psi=N[1]/M)
+niter=1000
+nburn=0
+nthin=1
+proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2) #Need 1 more propz
+out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
+primary=primary)
+plot(mcmc(out$out))
+#Note that if lam0 and/or sigma are primary period-specific, you still need to enter starting values
+and tuning parameters, but these parameters are not updated. You can ignore them in the MCMC output.
 }
 }
 \author{

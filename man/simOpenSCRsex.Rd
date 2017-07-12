@@ -12,36 +12,37 @@ simOpenSCRsex(N = cbind(c(30, 30), c(35, 45, 55)), psex = 0.5,
 }
 \arguments{
 \item{N}{a 1 x 2 vector or t x 2 matrix indicating the number of individuals to simulate. Column 1 is males, column 2 is females.
-If only the first year is entered, provide a gamma to determine E[N] in subsequent years to simulate realized N, a random
-variable.  Otherwise, nrow(N)=t, the number of years.  Do not enter a gamma if N for all years specified.}
+If only the first primary period is entered, provide one gamma (or two if sex-specific) to determine E[N] in subsequent primary periods to simulate realized N, a random
+variable.  Otherwise, nrow(N)=t, with t being the number of primary periods.  Do not enter a gamma if N for all primary periods is specified.}
 
-\item{psex}{a numeric indicating the probability a row of z (M x t) will be male.  This does not determine the sex ratio, but may be needed to
-simulate data from very sex-skewed populations without increasing M.  For most populations, psex=0.5 should work well.}
+\item{psex}{a numeric indicating the probability a row of z (M x t) used for simulation will be male.  This does not determine the sex ratio,
+but may be needed to simulate data from very sex-skewed populations without increasing M.  For most populations, the default psex=0.5 should work fine.}
 
-\item{pIDsex}{a numeric indicating the probability that you can ID the sex of a captured individual.}
+\item{pIDsex}{a numeric indicating the probability that the sex of a captured individual is identified.}
 
-\item{gamma}{a vector containing the per capita recruitment rates for each sex.  If length 1, gamma is the same for each sex.
-If length 2, sexes differ.  Note, this is the number of males recruited per total N and number of females recruited per
+\item{gamma}{a vector containing the per capita recruitment rates between primary periods.  If length 1, gamma is the same for each sex.
+If length 2, sexes differ (order is male, then female).  Note, this is the number of males recruited per total N and number of females recruited per
 total N and each will be smaller than the (sex agnostic) number of individuals recruited per total N.}
 
-\item{phi}{a vector containing the survival probabilities. If length 1, no sex difference is assumed.
-If length 2, sexes differ.}
+\item{phi}{a vector containing the survival probabilities between primary periods. If length 1, no sex difference.
+If length 2, sexes differ (order is male, then female).}
 
-\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If length 1, no sex difference is assumed.
-If length 2, sexes differ.}
+\item{lam0}{a vector containing the detection function expected number of captures at distance 0. If length 1, no sex difference.
+If length 2, sexes differ (order is male, then female).}
 
-\item{sigma}{a vector containing the detection function spatial scale parameters. If length 1, no sex difference is assumed.
-If length 2, sexes differ.}
+\item{sigma}{a vector containing the detection function spatial scale parameter. If length 1, no sex difference.
+If length 2, sexes differ (order is male, then female).}
 
-\item{K}{a vector containing the number of capture occasions in each year}
+\item{K}{a vector containing the number of capture occasions in each primary period}
 
-\item{X}{a list of trap locations in each year.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
-the number of traps in each year.}
+\item{X}{a list of trap locations in each primary period.  Each list element is a J[l] x 2 matrix of trap locations, with J[l] being
+the number of traps in each primary period.}
 
-\item{M}{an integer indicating the level of data augmentation to use during simulation.}
+\item{M}{an integer indicating the level of data augmentation to use during simulation.  This should be
+larger than the total number of individuals ever alive.}
 
-\item{sigma_t}{a numeric indicating the between year spatial scale parameter for ACtypes "metamu" "metamu2", "markov",
-and "markov2".  If size 1, no sex difference is assumed. Otherwise, sexes differ.  In "markov2", sigma_t is the exponential
+\item{sigma_t}{a vector indicating the between primary period spatial scale parameter for ACtypes "metamu" "metamu2", "markov",
+and "markov2".  If size 1, no sex difference. Otherwise, sexes differ (order is male, then female).  In "markov2", sigma_t is the exponential
 scale parameter}
 
 \item{buff}{a numeric indicating the distance to buffer the trapping array in the X and Y dimensions to produce the state space if using a
@@ -49,27 +50,25 @@ square or rectangular, continuous state space.}
 
 \item{obstype}{a character string indicating the observation model, either "bernoulli" or "poisson"}
 
-\item{ACtype}{a character string indicating the activity center model.  ACtypes can be divided into three types, those that operate on both
-continuous and discrete state spaces, those that operate only on continuous state spaces and those that operate only on
-discrete state spaces.  First, those operating on both.  1.  "fixed": activity centers do not move between years
-2.  "independent": activity centers for each individual are independent between years (e.g. random population mixing).
-Second, continuous state space models:  1. "metamu": yearly activity centers follow a bivariate normal distribution
-around a meta activity center with sigma_t determining the spread of yearly activity centers around the meta activity center.
-Yearly activity centers are required to stay inside the state space  2. "metamu2": is the same as "metamu" except only the
-meta activity centers are required to stay inside the state space.  The yearly ACs float around nearby the state space,
-linked to their meta activity center.  3. "markov": activity centers in year t+1 are a bivariate normal draw centered
-around the activity center in year t (but must stay within the state space).  Finally, the discrete state space ACtype,
-currently limited to "markov2":  activity centers in year t+1 follow an exponential dispersal kernel centered at the
-activity center in year t; however the availability of dispersal distances in the state space are factored into the
-dispersal decision.  This will be formally described elsewhere, but uses use vs. availability ideas to correct for
-restricted availabilities of dispersal distances.}
+\item{ACtype}{A character indicicating the type of activity centers.  "fixed" activity centers do not move between primary periods, "metamu" assumes there is a
+meta activity center around which the primary period activity centers distributed following a bivariate normal distribution
+with spatial scale parameter sigma_t.  Primary period activity centers are required to stay inside the state space.
+"metamu2" is identitcal to "metamu" except primary period activity centers are allowed to leave the state space.
+ markov" assumes activity centers in primary period 1 are distributed uniformly across the state space and the
+ activy centers in primary period l+1 are a bivariate normal draw centered around the activity center in
+ primary period l (but must stay within the state space).  "markov2" is the same as "markov" except each
+ dispersal considers the available distances to disperse to in a use vs. availability framework. Discrete
+ state space is required.  Finally, "independent" assumes animals randomly mix between primary periods.
+ (spatial uniformity in all primary periods with independence between primary periods).}
 
 \item{vertices}{an optional list of polygon vertices to use for the state space.  Each list element should be a matrix with 2
 columns, corresponding to the X and Y coordinates of polygon vertices.  The vertices must close the polygon (e.g. the first
 and last vertices should be the same).  Cannot enter both vertices and dSS.}
 
-\item{dSS}{an optional matrix of discrete state space locations.  The matrix should have 2 columns corresponding to
+\item{dSS}{an optional (N_SS x 2) matrix of discrete state space locations.  The matrix should have 2 columns corresponding to
 the X and Y coordinates of each state space element.  Cannot enter both vertices and dSS.}
+
+\item{primary}{a vector of length T with entries 1 if the population is to be observed in primary period l and 0 otherwise.}
 }
 \value{
 a list containing the capture history, activity centers, trap object, and several other data objects and summaries.

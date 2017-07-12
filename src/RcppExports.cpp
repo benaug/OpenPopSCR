@@ -20,8 +20,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // mcmc_Open
-List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma, NumericVector gammaprime, NumericVector phi, arma::cube D, arma::cube lamd, arma::cube y, IntegerMatrix z, IntegerMatrix a, NumericMatrix s1, arma::cube s2, int ACtype, bool useverts, List vertices, NumericVector xlim, NumericVector ylim, IntegerMatrix knownmatrix, IntegerVector Xidx, arma::cube Xcpp, IntegerVector K, NumericMatrix Ez, double psi, IntegerVector N, NumericVector proplam0, NumericVector propsig, NumericVector propz, NumericVector propgamma, double props1x, double props1y, double props2x, double props2y, double propsigma_t, NumericVector sigma_t, int niter, int nburn, int nthin, int npar, IntegerVector each, bool jointZ, IntegerMatrix zpossible, IntegerMatrix apossible, IntegerMatrix cancel, int obstype, IntegerMatrix tf, NumericMatrix dSS, bool usedSS, LogicalVector primary);
-RcppExport SEXP OpenPopSCR_mcmc_Open(SEXP lam0SEXP, SEXP sigmaSEXP, SEXP gammaSEXP, SEXP gammaprimeSEXP, SEXP phiSEXP, SEXP DSEXP, SEXP lamdSEXP, SEXP ySEXP, SEXP zSEXP, SEXP aSEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP ACtypeSEXP, SEXP usevertsSEXP, SEXP verticesSEXP, SEXP xlimSEXP, SEXP ylimSEXP, SEXP knownmatrixSEXP, SEXP XidxSEXP, SEXP XcppSEXP, SEXP KSEXP, SEXP EzSEXP, SEXP psiSEXP, SEXP NSEXP, SEXP proplam0SEXP, SEXP propsigSEXP, SEXP propzSEXP, SEXP propgammaSEXP, SEXP props1xSEXP, SEXP props1ySEXP, SEXP props2xSEXP, SEXP props2ySEXP, SEXP propsigma_tSEXP, SEXP sigma_tSEXP, SEXP niterSEXP, SEXP nburnSEXP, SEXP nthinSEXP, SEXP nparSEXP, SEXP eachSEXP, SEXP jointZSEXP, SEXP zpossibleSEXP, SEXP apossibleSEXP, SEXP cancelSEXP, SEXP obstypeSEXP, SEXP tfSEXP, SEXP dSSSEXP, SEXP usedSSSEXP, SEXP primarySEXP) {
+List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma, NumericVector gammaprime, NumericVector phi, arma::cube D, arma::cube lamd, arma::cube y, IntegerMatrix z, IntegerMatrix a, NumericMatrix s1, arma::cube s2, int ACtype, bool useverts, List vertices, NumericVector xlim, NumericVector ylim, IntegerMatrix knownmatrix, IntegerVector Xidx, arma::cube Xcpp, IntegerVector K, NumericMatrix Ez, double psi, IntegerVector N, NumericVector proplam0, NumericVector propsig, NumericVector propz, NumericVector propgamma, double props1x, double props1y, double props2x, double props2y, double propsigma_t, NumericVector sigma_t, int niter, int nburn, int nthin, int npar, IntegerVector each, bool jointZ, IntegerMatrix zpossible, IntegerMatrix apossible, IntegerMatrix cancel, int obstype, IntegerMatrix tf, IntegerMatrix s2cell, IntegerVector s1cell, NumericMatrix dSS, bool usedSS, LogicalVector primary, bool dualACup, int propdualAC, NumericMatrix distances);
+RcppExport SEXP OpenPopSCR_mcmc_Open(SEXP lam0SEXP, SEXP sigmaSEXP, SEXP gammaSEXP, SEXP gammaprimeSEXP, SEXP phiSEXP, SEXP DSEXP, SEXP lamdSEXP, SEXP ySEXP, SEXP zSEXP, SEXP aSEXP, SEXP s1SEXP, SEXP s2SEXP, SEXP ACtypeSEXP, SEXP usevertsSEXP, SEXP verticesSEXP, SEXP xlimSEXP, SEXP ylimSEXP, SEXP knownmatrixSEXP, SEXP XidxSEXP, SEXP XcppSEXP, SEXP KSEXP, SEXP EzSEXP, SEXP psiSEXP, SEXP NSEXP, SEXP proplam0SEXP, SEXP propsigSEXP, SEXP propzSEXP, SEXP propgammaSEXP, SEXP props1xSEXP, SEXP props1ySEXP, SEXP props2xSEXP, SEXP props2ySEXP, SEXP propsigma_tSEXP, SEXP sigma_tSEXP, SEXP niterSEXP, SEXP nburnSEXP, SEXP nthinSEXP, SEXP nparSEXP, SEXP eachSEXP, SEXP jointZSEXP, SEXP zpossibleSEXP, SEXP apossibleSEXP, SEXP cancelSEXP, SEXP obstypeSEXP, SEXP tfSEXP, SEXP s2cellSEXP, SEXP s1cellSEXP, SEXP dSSSEXP, SEXP usedSSSEXP, SEXP primarySEXP, SEXP dualACupSEXP, SEXP propdualACSEXP, SEXP distancesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -70,10 +70,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerMatrix >::type cancel(cancelSEXP);
     Rcpp::traits::input_parameter< int >::type obstype(obstypeSEXP);
     Rcpp::traits::input_parameter< IntegerMatrix >::type tf(tfSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type s2cell(s2cellSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type s1cell(s1cellSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type dSS(dSSSEXP);
     Rcpp::traits::input_parameter< bool >::type usedSS(usedSSSEXP);
     Rcpp::traits::input_parameter< LogicalVector >::type primary(primarySEXP);
-    rcpp_result_gen = Rcpp::wrap(mcmc_Open(lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, primary));
+    Rcpp::traits::input_parameter< bool >::type dualACup(dualACupSEXP);
+    Rcpp::traits::input_parameter< int >::type propdualAC(propdualACSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    rcpp_result_gen = Rcpp::wrap(mcmc_Open(lam0, sigma, gamma, gammaprime, phi, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, s2cell, s1cell, dSS, usedSS, primary, dualACup, propdualAC, distances));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -145,4 +150,16 @@ BEGIN_RCPP
     rcpp_result_gen = Rcpp::wrap(mcmc_Open_sex(lam0, sigma, gamma, gammaprimeM, gammaprimeF, phi, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_t, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex, primary, s2cell, s1cell, dualACup, propdualAC, distances));
     return rcpp_result_gen;
 END_RCPP
+}
+
+static const R_CallMethodDef CallEntries[] = {
+    {"OpenPopSCR_inoutCppOpen", (DL_FUNC) &OpenPopSCR_inoutCppOpen, 3},
+    {"OpenPopSCR_mcmc_Open", (DL_FUNC) &OpenPopSCR_mcmc_Open, 53},
+    {"OpenPopSCR_mcmc_Open_sex", (DL_FUNC) &OpenPopSCR_mcmc_Open_sex, 59},
+    {NULL, NULL, 0}
+};
+
+RcppExport void R_init_OpenPopSCR(DllInfo *dll) {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, FALSE);
 }
