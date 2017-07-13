@@ -28,8 +28,9 @@
 #'  will provide unbiased estimates.  If using a polygon state space with a Markov model, switching to a discrete
 #'  state space and ACype="markov2" will provide unbiased estimates.
 #' @param obstype a character indicating the observation model "bernoulli" or "poisson"
-#' @param primary a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
-#' population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.
+#' @param primary an optional vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+#' population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period. If not
+#' entered, the population is assumed to have been sampled in all primary periods.
 #' @param dSS an optional (N_SS x 2) matrix for a discrete state space locations that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
 #' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
 #' s1 being meta ACs and s2 being primary period ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are

@@ -39,8 +39,9 @@
 #' @param dualACup a logical to be used with discrete state spaces indicating whether a second, interpatch activity
 #' center proposal is used.  Currently under development--probably should not use.
 #' @param dSS an optional (N_SS x 2) matrix for a discrete state space locations that overrules the buff or vertices objects in "data".  A matrix with columns for x and y locations
-#' @param primary a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+#' @param primary an optional vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
 #' population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.
+#' If not entered, the population is assumed to have been sampled in all primary periods.
 #' @return  a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with
 #' s1 being meta ACs and s2 being primary period ACs), and z.  s1x and yout are of dimension niter x M and s2x and yout and z are
 #' of dimension niter x M x T.  Posteriors for the sex of each individual could be returned--email me if you want this.

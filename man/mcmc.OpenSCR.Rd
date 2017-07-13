@@ -56,8 +56,9 @@ with spatial scale parameter sigma_t.  Primary period activity centers are requi
 \item{dualACup}{a logical to be used with discrete state spaces indicating whether a second, interpatch activity
 center proposal is used.  Currently under development--probably should not use.}
 
-\item{primary}{a vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
-population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period.}
+\item{primary}{an optional vector of length t with entries 1 if data was recorded in that primary period and 0 if not. This allows
+population dynamics to occur at equal interval primary periods even if data was not recorded at each primary period. If not
+entered, the population is assumed to have been sampled in all primary periods.}
 }
 \value{
 a list with the posteriors for the open population SCR parameters (out), s (s1xout,s1yout,s2xout,s2yout with

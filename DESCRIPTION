@@ -1,14 +1,13 @@
 Package: OpenPopSCR
 Type: Package
 Title: Open Population Spatial Capture-recapture MCMC algorithms
-Version: 0.1.0
+Version: 1.0.0
 Author: Ben Augustine with some code adapted from Richard Chandler
 Maintainer: Ben Augustine <baugusti@vt.edu>
-Description: This package implements various open population SCR algorithms in R and Rcpp.  Current features include any combination of fixed or year-specific parameters, (potentially multiple) polygonal state spaces, trap operation files, discrete state spaces, bernoulli or poisson observation models, and multiple between year activity center models.  Sex-specific parameters with potentially some missing sexes are available in mcmc.OpenSCR.sex(), which is not in Rcpp, yet.
+Description: This package implements various open population SCR algorithms in R and Rcpp.  Current features include
+    any combination of fixed or year-specific parameters, (potentially multiple) polygonal state spaces, trap operation files, discrete state spaces, bernoulli or poisson observation models, and multiple between year activity center models.  Sex-specific parameters with potentially some missing sexes are available in mcmc.OpenSCR.sex().
     The advantages of this package over using JAGS are ease of use, not needing to know how to code in JAGS, and much faster computation.  The disadvantage is that you might want to do something not currently in the package that you can do in JAGS.  If this is the case, send me an email.
-    The main MCMC function is mcmc.OpenSCR where there is a help file with examples.
-    I've done recent work on the sex-specific sampler so it differs in how the discrete state space is handled.  I will update the yearly sampler
-    to reflect these changes after exploring them further.
+    The main MCMC functions are mcmc.OpenSCR and mcmc.OpenSCR.sex where there are help file with examples.
 License: GPL-2
 LazyData: TRUE
 Imports: Rcpp (>= 0.12.3), RcppArmadillo (>= 0.6.600.4.0)
