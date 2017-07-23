@@ -9,7 +9,7 @@
 #' and sigma_t (if using a structure movement model).
 #' @param proppars a list of tuning parameters for the proposal distributions with elements for lam0, sigma, gamma,
 #' s1x, s2y (for fixed and metamu models), s2x, s2y (for independent, markov, and metamu models), sex, and sigma_t (if using a structured movement model).
-#' @param keepACs a logical indicating whether or not to keep the posteriors for z, s1, and s2
+#' @param storeLatent a logical indicating whether or not to store and return the posteriors for z, s1, and/or s2
 #' @param jointZ a logical indicating whether you want to use the sequential or joint z update.
 #' @param Rcpp a logical indicating whether or not to use Rcpp
 #' @param ACtype a character string indicating the activity center model.  ACtypes can be divided into two types, those that operate on both
@@ -132,7 +132,7 @@
 #' proppars=list(lam0=c(0.075,0.115),sigma=c(0.055,0.045),gamma=c(0.115,0.085),s1x=0.4,s1y=0.4,
 #' s2x=0.5,s2y=0.5,sigma_t=c(0.04),sex=100)
 #' out=mcmc.OpenSCR.sex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,ACtype=ACtype,
-#'                    keepACs=TRUE,jointZ=TRUE)
+#'                    storeLatent=TRUE,jointZ=TRUE)
 #' plot(mcmc(out$out))
 #' #need to run longer for proper inference
 #' see the help file of mcmc.OpenSCR for examples with other ACtypes and state space options that work the
@@ -141,22 +141,26 @@
 #'@export
 
 mcmc.OpenSCR.sex <-
-  function(data,niter=1000,nburn=0, nthin=1,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,
+  function(data,niter=1000,nburn=0, nthin=1,M = NA, inits=NA,proppars=NA,jointZ=TRUE,storeLatent=TRUE,
            Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
     if(Rcpp==TRUE){ #Do we use Rcpp?
       # stop("Rcpp currently disabled for this sampler.  It needs to be updated.")
-      out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
+      out2=SCRmcmcOpensexRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
+                              jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup,storeLatent=storeLatent)
     }else{#Don't use Rcpp
-      out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
+      out2=SCRmcmcOpensex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
+                          jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup,storeLatent=storeLatent)
     }
-    if(keepACs==TRUE){
-      if("s2xout"%in%names(out2)){
+    if(storeLatent==TRUE){
+      if(ACtype%in%c("markov","markov2","independent")){
+        list(out=out2$out, s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
+      }else if(ACtype%in%c("metamu","metamu2")){
         list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
       }else{
         list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout,dSS=dSS)
       }
     }else{
-      list(out=out2$out)
+      list(out=out2$out,dSS=dSS)
     }
   }
 

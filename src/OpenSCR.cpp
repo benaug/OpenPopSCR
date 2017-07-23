@@ -80,7 +80,7 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
                IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,IntegerMatrix s2cell,
                IntegerVector s1cell,NumericMatrix dSS,bool usedSS,LogicalVector primary,
-               bool dualACup,int propdualAC,NumericMatrix distances) {
+               bool dualACup,int propdualAC,NumericMatrix distances,bool storeLatent) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -201,15 +201,19 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   NumericVector sigma_t_cand(1);
   //Structures to record output
   int nstore=(niter-nburn)/nthin;
+  int nstore2=nstore;
   if(nburn % nthin!=0){
     nstore=nstore+1;
   }
   NumericMatrix out(nstore,npar);
-  NumericMatrix s1xout(nstore,M);
-  NumericMatrix s1yout(nstore,M);
-  arma::cube s2xout(nstore,M,t);
-  arma::cube s2yout(nstore,M,t);
-  arma::cube zout(nstore,M,t);
+  if(!storeLatent){
+    nstore2=1;
+  }
+  NumericMatrix s1xout(nstore2,M);
+  NumericMatrix s1yout(nstore2,M);
+  arma::cube s2xout(nstore2,M,t);
+  arma::cube s2yout(nstore2,M,t);
+  arma::cube zout(nstore2,M,t);
 
   //Can update anyone who wasn't captured on every occasion
   for(int i=0; i<M; i++){
@@ -2429,15 +2433,17 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
       }
     }
 
-    //Record output ll_y_curr.subcube(i,0,0,i,maxJ-1,0) s2yout(nstore,M,t)
+    //Record output
     if(((iter+1)>nburn)&((iter+1) % nthin==0)){
-      for(int i=0; i<M; i++){
-        s1xout(iteridx,i)= s1(i,0);
-        s1yout(iteridx,i)= s1(i,1);
-        for(int l=0; l<t; l++){
-          s2xout(iteridx,i,l)=s2(i,l,0);
-          s2yout(iteridx,i,l)=s2(i,l,1);
-          zout(iteridx,i,l)= z(i,l);
+      if(storeLatent){
+        for(int i=0; i<M; i++){
+          s1xout(iteridx,i)= s1(i,0);
+          s1yout(iteridx,i)= s1(i,1);
+          for(int l=0; l<t; l++){
+            s2xout(iteridx,i,l)=s2(i,l,0);
+            s2yout(iteridx,i,l)=s2(i,l,1);
+            zout(iteridx,i,l)= z(i,l);
+          }
         }
       }
       idx=0;
@@ -2510,7 +2516,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
                    int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
                    IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,NumericMatrix dSS,bool usedSS,
                    LogicalVector sexparms,IntegerVector choosesex,LogicalVector primary, IntegerMatrix s2cell,
-                   IntegerVector s1cell, bool dualACup, int propdualAC,NumericMatrix distances) {
+                   IntegerVector s1cell, bool dualACup, int propdualAC,NumericMatrix distances,bool storeLatent) {
   RNGScope scope;
   int M = size(lamd)[0];
   int J = size(lamd)[1];
@@ -2615,15 +2621,19 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
   NumericVector sigma_t_cand;
   //Structures to record output
   int nstore=(niter-nburn)/nthin;
+  int nstore2=nstore;
   if(nburn % nthin!=0){
     nstore=nstore+1;
   }
   NumericMatrix out(nstore,npar);
-  NumericMatrix s1xout(nstore,M);
-  NumericMatrix s1yout(nstore,M);
-  arma::cube s2xout(nstore,M,t);
-  arma::cube s2yout(nstore,M,t);
-  arma::cube zout(nstore,M,t);
+  if(!storeLatent){
+    nstore2=1;
+  }
+  NumericMatrix s1xout(nstore2,M);
+  NumericMatrix s1yout(nstore2,M);
+  arma::cube s2xout(nstore2,M,t);
+  arma::cube s2yout(nstore2,M,t);
+  arma::cube zout(nstore2,M,t);
 
   //Set up discrete state space
   int NdSS=dSS.nrow();
@@ -5745,15 +5755,17 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
         }
       }
 
-      //Record output ll_y_curr.subcube(i,0,0,i,maxJ-1,0) s2yout(nstore,M,t)
+      //Record output
       if(((iter+1)>nburn)&((iter+1) % nthin==0)){
-        for(int i=0; i<M; i++){
-          s1xout(iteridx,i)= s1(i,0);
-          s1yout(iteridx,i)= s1(i,1);
-          for(int l=0; l<t; l++){
-            s2xout(iteridx,i,l)=s2(i,l,0);
-            s2yout(iteridx,i,l)=s2(i,l,1);
-            zout(iteridx,i,l)= z(i,l);
+        if(storeLatent){
+          for(int i=0; i<M; i++){
+            s1xout(iteridx,i)= s1(i,0);
+            s1yout(iteridx,i)= s1(i,1);
+            for(int l=0; l<t; l++){
+              s2xout(iteridx,i,l)=s2(i,l,0);
+              s2yout(iteridx,i,l)=s2(i,l,1);
+              zout(iteridx,i,l)= z(i,l);
+            }
           }
         }
         idx=0;

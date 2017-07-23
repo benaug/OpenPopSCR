@@ -5,7 +5,7 @@
 \title{Run MCMC algorithm for fixed parameter or primary period-specific parameter open population SCR model.}
 \usage{
 mcmc.OpenSCR(data, niter = 1000, nburn = 0, nthin = 1, K = NA, M = NA,
-  inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
+  inits = NA, proppars = NA, jointZ = TRUE, storeLatent = TRUE,
   Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
   dualACup = FALSE)
 }
@@ -29,7 +29,7 @@ s1x, s2y (for fixed and metamu models), s2x, s2y (for independent, markov, and m
 
 \item{jointZ}{a logical indicating whether you want to use the sequential or joint z update.}
 
-\item{keepACs}{a logical indicating whether or not to keep the posteriors for z, s1, and s2}
+\item{storeLatent}{a logical indicating whether or not to store and return the posteriors for z, s1, and/or s2}
 
 \item{Rcpp}{a logical indicating whether or not to use Rcpp}
 

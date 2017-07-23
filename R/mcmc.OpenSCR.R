@@ -9,7 +9,7 @@
 #' and sigma_t (if using a structure movement model).
 #' @param proppars a list of tuning parameters for the proposal distributions with elements for lam0, sigma, gamma,
 #' s1x, s2y (for fixed and metamu models), s2x, s2y (for independent, markov, and metamu models), sex, and sigma_t (if using a structured movement model).
-#' @param keepACs a logical indicating whether or not to keep the posteriors for z, s1, and s2
+#' @param storeLatent a logical indicating whether or not to store and return the posteriors for z, s1, and/or s2
 #' @param jointZ a logical indicating whether you want to use the sequential or joint z update.
 #' @param Rcpp a logical indicating whether or not to use Rcpp
 #' @param ACtype A character indicating the type of activity centers.  "fixed" activity centers do not move between primary periods, "metamu" assumes there is a
@@ -369,20 +369,24 @@
 #'@export
 
 mcmc.OpenSCR <-
-  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,keepACs=TRUE,Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
+  function(data,niter=1000,nburn=0, nthin=1, K=NA,M = NA, inits=NA,proppars=NA,jointZ=TRUE,storeLatent=TRUE,Rcpp=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
     if(Rcpp==TRUE){ #Do we use Rcpp?
-      out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
+      out2=SCRmcmcOpenRcpp(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
+                           jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup,storeLatent=storeLatent)
     }else{#Don't use Rcpp
-      out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup)
+      out2=SCRmcmcOpen(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
+                       jointZ=jointZ,ACtype=ACtype,obstype=obstype,dSS=dSS,dualACup=dualACup,storeLatent=storeLatent)
     }
-    if(keepACs==TRUE){
-      if("s2xout"%in%names(out2)){
+    if(storeLatent==TRUE){
+      if(ACtype%in%c("markov","markov2","independent")){
+        list(out=out2$out, s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
+      }else if(ACtype%in%c("metamu","metamu2")){
         list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
       }else{
         list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout,dSS=dSS)
       }
     }else{
-      list(out=out2$out)
+      list(out=out2$out,dSS=dSS)
     }
   }
 

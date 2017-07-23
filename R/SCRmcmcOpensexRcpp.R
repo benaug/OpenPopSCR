@@ -1,6 +1,6 @@
 SCRmcmcOpensexRcpp <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
-           jointZ=TRUE,keepACs=TRUE,ACtype="fixed",obstype="bernoulli",dSS,dualACup=FALSE){
+           jointZ=TRUE,storeLatent=TRUE,ACtype="fixed",obstype="bernoulli",dSS,dualACup=FALSE){
     library(abind)
     t=dim(data$y)[3]
     y<-data$y
@@ -669,8 +669,6 @@ SCRmcmcOpensexRcpp <-
       stop("niter is smaller than nburn")
     }
 
-    # idx=1 #for storing output not recorded every iteration
-
     D=lamd=ll.y=ll.y.cand=array(0,dim=c(M,maxJ,t))
     # D[is.na(D)]=Inf  #hack to allow years with different J and K to fit in one array
     for(l in 1:t){
@@ -867,9 +865,7 @@ SCRmcmcOpensexRcpp <-
                     N, proppars$lam0, proppars$sigma, proppars$propz,  proppars$gamma, proppars$s1x,  proppars$s1y,
                     proppars$s2x,proppars$s2y,proppars$sigma_t,proppars$sex,sigma_t,niter,nburn,nthin,npar,each,jointZ,
                     zpossible,apossible,cancel,obstype2,tf2,dSS,usedSS,sexparmsin,which(known.sex==0)-1,primaryin,
-                    s2.cell-1,s1.cell-1,dualACup,proppars$dualAC,distances)
-
-
+                    s2.cell-1,s1.cell-1,dualACup,proppars$dualAC,distances,storeLatent)
 
     out=store[[1]]
     s1xout=store[[2]]
@@ -921,14 +917,16 @@ SCRmcmcOpensexRcpp <-
     }else{
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,Nmnames,Nfnames,"psex","psi")
     }
-    if(keepACs==TRUE){
-      if(ACtype%in%c(2,3,4,5,6)){
+    if(storeLatent==TRUE){
+      if(ACtype%in%c(3,4,6)){
+        list(out=out,s2xout=s2xout, s2yout=s2yout, zout=zout)
+      }else if(ACtype%in%c(2,5)){
         list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)
       }else{
         list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout)
       }
     }else{
-      list(out=out,zout=zout)
+      list(out=out)
     }
   }
 

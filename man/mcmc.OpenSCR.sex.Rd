@@ -5,7 +5,7 @@
 \title{Run MCMC algorithm for fixed or sex-specific parameter open population SCR model.}
 \usage{
 mcmc.OpenSCR.sex(data, niter = 1000, nburn = 0, nthin = 1, M = NA,
-  inits = NA, proppars = NA, jointZ = TRUE, keepACs = TRUE,
+  inits = NA, proppars = NA, jointZ = TRUE, storeLatent = TRUE,
   Rcpp = TRUE, ACtype = "fixed", obstype = "bernoulli", dSS = NA,
   dualACup = FALSE)
 }
@@ -29,7 +29,7 @@ s1x, s2y (for fixed and metamu models), s2x, s2y (for independent, markov, and m
 
 \item{jointZ}{a logical indicating whether you want to use the sequential or joint z update.}
 
-\item{keepACs}{a logical indicating whether or not to keep the posteriors for z, s1, and s2}
+\item{storeLatent}{a logical indicating whether or not to store and return the posteriors for z, s1, and/or s2}
 
 \item{Rcpp}{a logical indicating whether or not to use Rcpp}
 
@@ -160,7 +160,7 @@ nthin=1
 proppars=list(lam0=c(0.075,0.115),sigma=c(0.055,0.045),gamma=c(0.115,0.085),s1x=0.4,s1y=0.4,
 s2x=0.5,s2y=0.5,sigma_t=c(0.04),sex=100)
 out=mcmc.OpenSCR.sex(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,ACtype=ACtype,
-                   keepACs=TRUE,jointZ=TRUE)
+                   storeLatent=TRUE,jointZ=TRUE)
 plot(mcmc(out$out))
 #need to run longer for proper inference
 see the help file of mcmc.OpenSCR for examples with other ACtypes and state space options that work the
