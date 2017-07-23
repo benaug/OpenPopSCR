@@ -4,7 +4,7 @@
 \alias{DerivedValues}
 \title{Function to post-process MCMC results of the year-specific sampler}
 \usage{
-DerivedValues(N, gamma, phi, psi, M)
+DerivedValues(N, gamma, phi, psi, M, extrap = 0)
 }
 \arguments{
 \item{N}{matrix containing the posteriors for abundance}
@@ -16,6 +16,9 @@ DerivedValues(N, gamma, phi, psi, M)
 \item{psi}{vector containing the posterior for psi}
 
 \item{M}{an integer indicating the i dimension of the augmented data}
+
+\item{extrap}{an optional integer indicating how many primary periods to extrapolate beyond the
+observed primary periods for EN. These are abundance projections from the population growth model}
 }
 \value{
 a list containing realized and expected population growth rates and population sizes,

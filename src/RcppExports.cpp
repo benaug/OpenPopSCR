@@ -151,15 +151,3 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-
-static const R_CallMethodDef CallEntries[] = {
-    {"OpenPopSCR_inoutCppOpen", (DL_FUNC) &OpenPopSCR_inoutCppOpen, 3},
-    {"OpenPopSCR_mcmc_Open", (DL_FUNC) &OpenPopSCR_mcmc_Open, 53},
-    {"OpenPopSCR_mcmc_Open_sex", (DL_FUNC) &OpenPopSCR_mcmc_Open_sex, 59},
-    {NULL, NULL, 0}
-};
-
-RcppExport void R_init_OpenPopSCR(DllInfo *dll) {
-    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, FALSE);
-}

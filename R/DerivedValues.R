@@ -4,6 +4,8 @@
 #' @param phi matrix or vector containing the posteriors for phi(s)
 #' @param psi vector containing the posterior for psi
 #' @param M an integer indicating the i dimension of the augmented data
+#' @param extrap an optional integer indicating how many primary periods to extrapolate beyond the
+#' observed primary periods for EN. These are abundance projections from the population growth model
 #' @return a list containing realized and expected population growth rates and population sizes,
 #' @description This function derives realized and expected population growth rates and population sizes
 #' from the inputted MCMC chains.
@@ -39,7 +41,7 @@
 #' }
 #' @export
 
-DerivedValues=function(N,gamma,phi,psi,M){
+DerivedValues=function(N,gamma,phi,psi,M,extrap=0){
   t=ncol(N)
   if(!is.matrix(gamma)){
     gamma=matrix(rep(gamma,t-1),ncol=(t-1))
@@ -56,6 +58,17 @@ DerivedValues=function(N,gamma,phi,psi,M){
     EN[,l]=EN[,l-1]*(phi[,l-1]+gamma[,l-1])
     Elambda[,l-1]=EN[,l]/EN[,l-1]
     lambda[,l-1]=N[,l]/N[,l-1]
+  }
+  if(extrap>0){
+    EN=matrix(NA,ncol=extrap,nrow=iters)
+    #extrap period 1
+    EN2[,l]=EN[,t]*(phi[,l-1]+gamma[,l-1])
+    if(extrap>1){
+      for(l in 2:extrap){
+        EN2[,l]=EN2[,l-1]*(phi[,l-1]+gamma[,l-1])
+      }
+    }
+    EN=cbind(EN,EN2)
   }
   return(out=list(EN=EN,lambda=lambda,Elambda=Elambda))
 }

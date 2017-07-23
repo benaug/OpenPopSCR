@@ -6,6 +6,8 @@
 #' @param psex vector containing the posterior for psex
 #' @param psi vector containing the posterior for psi
 #' @param M an integer indicating the i dimension of the augmented data
+#' @param extrap an optional integer indicating how many primary periods to extrapolate beyond the
+#' observed primary periods for EN, ENm, and ENf. These are abundance projections from the population growth model
 #' @return a list containing realized and expected population growth rates, population sizes,
 #' and sex ratios
 #' @description This function derives realized and expected population growth rates, population sizes, and sex ratios
@@ -48,7 +50,7 @@
 #' }
 #' @export
 
-DerivedValuesSex=function(Nm,Nf,gamma,phi,psex,psi,M){
+DerivedValuesSex=function(Nm,Nf,gamma,phi,psex,psi,M,extrap=0){
   if(!is.matrix(gamma)){
     gamma=cbind(gamma,gamma)
   }
@@ -80,7 +82,24 @@ DerivedValuesSex=function(Nm,Nf,gamma,phi,psex,psi,M){
     Esex[,l]=ENf[,l]/EN[,l]
     sex[,l]=Nf[,l]/N[,l]
   }
-  return(out=list(EN=EN,ENm=ENm,ENf=ENf,lambda=lambda,lambdaM=lambdaM,lambdaF=lambdaF,
-                   Elambda=Elambda,ElambdaM=ElambdaM,ElambdaF=ElambdaF,sex=sex,Esex=Esex))
+  if(extrap>0){
+    ENm2=ENf2=matrix(NA,ncol=extrap,nrow=iters)
+    #extrap period 1
+    ENm2[,1]=ENm[,t]*(phi[,1]+gamma[,1])+ENf[,t]*gamma[,1]
+    ENf2[,1]=ENf[,t]*(phi[,2]+gamma[,2])+ENm[,t]*gamma[,2]
+    if(extrap>1){
+      for(l in 2:extrap){
+        ENm2[,l]=ENm2[,l-1]*(phi[,1]+gamma[,1])+ENf2[,l-1]*gamma[,1]
+        ENf2[,l]=ENf2[,l-1]*(phi[,2]+gamma[,2])+ENm2[,l-1]*gamma[,2]
+      }
+    }
+    EN2=ENm2+ENf2
+    EN=cbind(EN,EN2)
+    ENm=cbind(ENm,ENm2)
+    ENf=cbind(ENf,ENf2)
+  }
+    return(out=list(EN=EN,ENm=ENm,ENf=ENf,lambda=lambda,lambdaM=lambdaM,lambdaF=lambdaF,
+                    Elambda=Elambda,ElambdaM=ElambdaM,ElambdaF=ElambdaF,sex=sex,Esex=Esex))
+
 }
 

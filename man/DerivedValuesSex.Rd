@@ -4,7 +4,7 @@
 \alias{DerivedValuesSex}
 \title{Function to post-process MCMC results for the sex-specific sampler}
 \usage{
-DerivedValuesSex(Nm, Nf, gamma, phi, psex, psi, M)
+DerivedValuesSex(Nm, Nf, gamma, phi, psex, psi, M, extrap = 0)
 }
 \arguments{
 \item{Nm}{matrix containing the posteriors for the number of males}
@@ -20,6 +20,9 @@ DerivedValuesSex(Nm, Nf, gamma, phi, psex, psi, M)
 \item{psi}{vector containing the posterior for psi}
 
 \item{M}{an integer indicating the i dimension of the augmented data}
+
+\item{extrap}{an optional integer indicating how many primary periods to extrapolate beyond the
+observed primary periods for EN, ENm, and ENf. These are abundance projections from the population growth model}
 }
 \value{
 a list containing realized and expected population growth rates, population sizes,

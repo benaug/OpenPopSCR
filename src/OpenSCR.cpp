@@ -4374,6 +4374,7 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
             }else{
               ScandX=Rcpp::rnorm(1,s2(i,l,0),props2x);
               ScandY=Rcpp::rnorm(1,s2(i,l,1),props2y);
+              MHratio=1;
               if(useverts==FALSE){
                 inbox=(ScandX<xlim(1)) & (ScandX>xlim(0)) & (ScandY<ylim(1)) & (ScandY>ylim(0));
               }else{

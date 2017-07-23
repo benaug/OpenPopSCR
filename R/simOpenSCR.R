@@ -288,8 +288,8 @@ simOpenSCR <-
         }
       }
     }else if(ACtype=="independent"){
-      for(i in 1:t){
-        if(useverts){
+      if(useverts){
+        for(i in 1:t){
           s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
           countout=0
           for(j in 1:M){
@@ -303,19 +303,21 @@ simOpenSCR <-
               }
             }
           }
-        }else if(usedSS){
-          NdSS=nrow(dSS)
-          for(l in 1:t){
-            s[,l,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
-          }
-        }else{
+        }
+      }else if(usedSS){
+        NdSS=nrow(dSS)
+        for(i in 1:t){
+          s[,i,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
+        }
+      }else{
+        for(i in 1:t){
           s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
         }
-        for(i in 1:t){
-          if(primary[i]){
-            D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
-            lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
-          }
+      }
+      for(i in 1:t){
+        if(primary[i]){
+          D[,1:nrow(X[[i]]),i]=e2dist(s[,i,],X[[i]])
+          lamd[,,i]=lam0[i]*exp(-D[,,i]^2/(2*sigma[i]*sigma[i]))
         }
       }
     }else{

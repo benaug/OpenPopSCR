@@ -317,11 +317,13 @@ simOpenSCRsex <-
         }
       }else if(usedSS){
         NdSS=nrow(dSS)
-        for(l in 1:t){
-          s[,l,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
+        for(i in 1:t){
+          s[,i,]=dSS[sample(1:NdSS,M,replace=TRUE),1:2]
         }
       }else{
-        s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
+        for(i in 1:t){
+          s[,i,]=cbind(runif(M, xlim[1]-buff,xlim[2]+buff), runif(M,ylim[1]-buff,ylim[2]+buff))
+        }
       }
       for(i in 1:t){
         if(primary[i]==1){
