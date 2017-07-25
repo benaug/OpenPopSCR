@@ -71,7 +71,7 @@ using namespace Rcpp;
 using namespace arma;
 #include <RcppArmadilloExtensions/sample.h>
 // [[Rcpp::export]]
-List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,NumericVector gammaprime, NumericVector phi,
+List mcmc_Open(NumericVector lam0in, NumericVector sigmain, NumericVector gammain,NumericVector gammaprime, NumericVector phiin,
                arma::cube D,arma::cube lamd, arma::cube y,IntegerMatrix z,IntegerMatrix a, NumericMatrix s1,arma::cube s2,
                int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,
                IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
@@ -85,6 +85,10 @@ List mcmc_Open(NumericVector lam0, NumericVector sigma, NumericVector gamma,Nume
   int M = size(lamd)[0];
   int J = size(lamd)[1];
   int t = size(lamd)[2];
+  NumericVector lam0=clone(lam0in);
+  NumericVector sigma=clone(sigmain);
+  NumericVector gamma=clone(gammain);
+  NumericVector phi=clone(phiin);
   //Preallocate detection function
   NumericVector lam0cand(t);
   NumericVector sigmacand(t);
@@ -2506,8 +2510,8 @@ using namespace Rcpp;
 using namespace arma;
 #include <RcppArmadilloExtensions/sample.h>
 // [[Rcpp::export]]
-List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,NumericVector gammaprimeM,
-                   NumericVector gammaprimeF, NumericVector phi,double psex, arma::cube D,arma::cube lamd,
+List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector gammain,NumericVector gammaprimeM,
+                   NumericVector gammaprimeF, NumericVector phiin,double psex, arma::cube D,arma::cube lamd,
                    arma::cube y,IntegerMatrix z,IntegerMatrix a, NumericMatrix s1,arma::cube s2,
                    int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,IntegerVector sex,
                    IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
@@ -2521,6 +2525,10 @@ List mcmc_Open_sex(NumericVector lam0, NumericVector sigma, NumericVector gamma,
   int M = size(lamd)[0];
   int J = size(lamd)[1];
   int t = size(lamd)[2];
+  NumericVector lam0=clone(lam0in);
+  NumericVector sigma=clone(sigmain);
+  NumericVector gamma=clone(gammain);
+  NumericVector phi=clone(phiin);
   //Preallocate detection function
   NumericVector lam0cand(2);
   NumericVector sigmacand(2);
