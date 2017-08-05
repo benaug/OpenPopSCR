@@ -254,7 +254,7 @@ SCRmcmcOpenRcpp <-
         }else{
           next
         }
-        pick=sample(cands,nleft)
+        # pick=sample(cands,nleft)
         z[pick,i]=1
         a[pick,i:t]=0
       }
@@ -279,6 +279,9 @@ SCRmcmcOpenRcpp <-
       gamma.prime[l-1]=N[l-1]*gammause[l-1] / sum(a[,l-1])
       Ez[,l-1]=z[,l-1]*phiuse[l-1] + a[,l-1]*gamma.prime[l-1]
       ll.z[,l]=dbinom(z[,l], 1, Ez[,l-1], log=TRUE)
+    }
+    if(any(gamma.prime>1)){
+      stop("raise M, lower gamma, phi and/or psi inits. Ran out of inds to recruit during init.")
     }
     ll.z.cand=ll.z
     gamma.prime.cand=gamma.prime

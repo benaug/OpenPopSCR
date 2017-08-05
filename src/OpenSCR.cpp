@@ -76,7 +76,7 @@ List mcmc_Open(NumericVector lam0in, NumericVector sigmain, NumericVector gammai
                int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,
                IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
                IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
-               double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_t,
+               double props1y,double props2x,double props2y, double propsigma_t,NumericVector sigma_tin,
                int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
                IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,IntegerMatrix s2cell,
                IntegerVector s1cell,NumericMatrix dSS,bool usedSS,LogicalVector primary,
@@ -89,6 +89,7 @@ List mcmc_Open(NumericVector lam0in, NumericVector sigmain, NumericVector gammai
   NumericVector sigma=clone(sigmain);
   NumericVector gamma=clone(gammain);
   NumericVector phi=clone(phiin);
+  NumericVector sigma_t=clone(sigma_tin);
   //Preallocate detection function
   NumericVector lam0cand(t);
   NumericVector sigmacand(t);
@@ -2516,7 +2517,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
                    int ACtype, bool useverts,List vertices,NumericVector xlim,NumericVector ylim,IntegerVector sex,
                    IntegerMatrix knownmatrix,IntegerVector Xidx, arma::cube Xcpp,IntegerVector K,NumericMatrix Ez, double psi,
                    IntegerVector N,NumericVector proplam0, NumericVector propsig,NumericVector propz, NumericVector propgamma,double props1x,
-                   double props1y,double props2x,double props2y, NumericVector propsigma_t,int propsex,NumericVector sigma_t,
+                   double props1y,double props2x,double props2y, NumericVector propsigma_t,int propsex,NumericVector sigma_tin,
                    int niter, int nburn, int nthin,int npar,IntegerVector each,bool jointZ,IntegerMatrix zpossible,
                    IntegerMatrix apossible,IntegerMatrix cancel,int obstype,IntegerMatrix tf,NumericMatrix dSS,bool usedSS,
                    LogicalVector sexparms,IntegerVector choosesex,LogicalVector primary, IntegerMatrix s2cell,
@@ -2529,6 +2530,8 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
   NumericVector sigma=clone(sigmain);
   NumericVector gamma=clone(gammain);
   NumericVector phi=clone(phiin);
+  NumericVector sigma_t=clone(sigma_tin);
+
   //Preallocate detection function
   NumericVector lam0cand(2);
   NumericVector sigmacand(2);

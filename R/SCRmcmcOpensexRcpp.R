@@ -351,7 +351,7 @@ SCRmcmcOpensexRcpp <-
       ll.z[,l]=dbinom(z[,l], 1, Ez[,l-1], log=TRUE)
     }
     if(any(c(gamma.primeM,gamma.primeF)>1)){
-      stop("raise M, lower gamma, phi and/or psi inits")
+      stop("Raise M, lower gamma, phi and/or psi inits. Ran out of inds to recruit during init.")
     }
     ll.z.cand=ll.z
     gamma.primeM.cand=gamma.primeM
