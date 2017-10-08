@@ -36,9 +36,7 @@ SCRmcmcOpensexRcpp <-
       }
       NdSS=nrow(dSS)
       useverts=FALSE
-      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
-        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
-      }
+
     }else{
       if(ACtype=="markov2"){
         stop("Must enter dSS for markov2")
@@ -85,6 +83,11 @@ SCRmcmcOpensexRcpp <-
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
+    }
+    if(usedSS){
+      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
+        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
+      }
     }
     if("tf"%in%names(data)){
       tf=data$tf
@@ -873,8 +876,9 @@ SCRmcmcOpensexRcpp <-
     s2xout=store[[4]]
     s2yout=store[[5]]
     zout=store[[6]]
-    warn=store[[7]]
-    # aout=store[[8]]
+    sexout=store[[7]]
+    warn=store[[8]]
+
     # llzout=store[[8]]
     # storeupz=store[[14]]
     # storeswapz=store[[15]]
@@ -919,11 +923,11 @@ SCRmcmcOpensexRcpp <-
     }
     if(storeLatent==TRUE){
       if(ACtype%in%c(3,4,6)){
-        list(out=out,s2xout=s2xout, s2yout=s2yout, zout=zout)
+        list(out=out,s2xout=s2xout, s2yout=s2yout, zout=zout,sexout=sexout)
       }else if(ACtype%in%c(2,5)){
-        list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)
+        list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout,sexout=sexout)
       }else{
-        list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout)
+        list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout,sexout=sexout)
       }
     }else{
       list(out=out)

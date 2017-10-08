@@ -2645,6 +2645,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
   arma::cube s2xout(nstore2,M,t);
   arma::cube s2yout(nstore2,M,t);
   arma::cube zout(nstore2,M,t);
+  NumericMatrix sexout(nstore2,M);
 
   //Set up discrete state space
   int NdSS=dSS.nrow();
@@ -5772,6 +5773,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
           for(int i=0; i<M; i++){
             s1xout(iteridx,i)= s1(i,0);
             s1yout(iteridx,i)= s1(i,1);
+            sexout(iteridx,i)= sex(i);
             for(int l=0; l<t; l++){
               s2xout(iteridx,i,l)=s2(i,l,0);
               s2yout(iteridx,i,l)=s2(i,l,1);
@@ -5839,8 +5841,8 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
   to_return[3] = s2xout;
   to_return[4] = s2yout;
   to_return[5] = zout;
-  to_return[6] = warncount;
-  to_return[7] = a;
+  to_return[6] = sexout;
+  to_return[7] = warncount;
   to_return[8] = ll_s2;
   to_return[9] = ll_s2_cand;
   return to_return;

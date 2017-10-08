@@ -10,6 +10,6 @@ Description: This package implements various open population SCR algorithms in R
     The main MCMC functions are mcmc.OpenSCR and mcmc.OpenSCR.sex where there are help file with examples.
 License: GPL-2
 LazyData: TRUE
-Imports: Rcpp (>= 0.12.3), RcppArmadillo (>= 0.6.600.4.0)
+Imports: Rcpp (>= 0.12.3), RcppArmadillo (>= 0.6.600.4.0),abind
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 6.0.1

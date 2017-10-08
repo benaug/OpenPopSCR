@@ -153,11 +153,12 @@ mcmc.OpenSCR.sex <-
     }
     if(storeLatent==TRUE){
       if(ACtype%in%c("markov","markov2","independent")){
-        list(out=out2$out, s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
+        list(out=out2$out, s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,sexout=out2$sexout,dSS=dSS)
       }else if(ACtype%in%c("metamu","metamu2")){
-        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout, zout=out2$zout,dSS=dSS)
+        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout,s2xout=out2$s2xout, s2yout=out2$s2yout,
+             zout=out2$zout,sexout=out2$sexout,dSS=dSS)
       }else{
-        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout,dSS=dSS)
+        list(out=out2$out, s1xout=out2$s1xout, s1yout=out2$s1yout, zout=out2$zout,sexout=out2$sexout,dSS=dSS)
       }
     }else{
       list(out=out2$out,dSS=dSS)

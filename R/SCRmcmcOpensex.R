@@ -36,9 +36,6 @@ SCRmcmcOpensex <-
       }
       NdSS=nrow(dSS)
       useverts=FALSE
-      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
-        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
-      }
     }else{
       if(ACtype=="markov2"){
         stop("Must enter dSS for markov2")
@@ -85,6 +82,11 @@ SCRmcmcOpensex <-
       useverts=FALSE
     }else{
       stop("user must supply either 'buff' or 'vertices' in data object")
+    }
+    if(usedSS){
+      if(max(dSS[,1])>xlim[2]|min(dSS[,1])<xlim[1]|max(dSS[,2])>ylim[2]|min(dSS[,2])<ylim[1]){
+        stop("dSS dimensions exceed xlim or ylim. Change dSS or buff")
+      }
     }
     if("tf"%in%names(data)){
       tf=data$tf
@@ -745,6 +747,7 @@ SCRmcmcOpensex <-
       if(storeLatent){
         zout<-array(NA,dim=c(nstore,M,t))
         s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
+        sexout=matrix(NA,nrow=nstore,ncol=M)
       }
     }else if(ACtype%in%c("metamu","metamu2")){
       if(sexparms$sigma_t=="fixed"){
@@ -758,18 +761,23 @@ SCRmcmcOpensex <-
         s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
         zout<-array(NA,dim=c(nstore,M,t))
         s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
+        sexout=matrix(NA,nrow=nstore,ncol=M)
       }
     }else if(ACtype=="independent"){
       out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2)
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex","psi")
-      zout<-array(NA,dim=c(nstore,M,t))
-      s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
+      if(storeLatent){
+        zout<-array(NA,dim=c(nstore,M,t))
+        s2xout<- s2yout<-array(NA,dim=c(nstore,M,t))
+        sexout=matrix(NA,nrow=nstore,ncol=M)
+      }
     }else{
       out<-matrix(NA,nrow=nstore,ncol=length(lam0)+length(sigma)+length(gamma)+length(phi)+t*3+2)
       colnames(out)<-c(lam0names,sigmanames,gammanames,phinames,Nnames,NMnames,NFnames,"psex","psi")
       if(storeLatent){
         s1xout<- s1yout<- matrix(NA,nrow=nstore,ncol=M)
         zout<-array(NA,dim=c(nstore,M,t))
+        sexout=matrix(NA,nrow=nstore,ncol=M)
       }
     }
     idx=1 #for storing output not recorded every iteration
@@ -2369,6 +2377,7 @@ SCRmcmcOpensex <-
       if(iter>(nburn)&iter%%nthin==0){
         if(storeLatent){
           zout[idx,,]<- z
+          sexout[idx,]=sex
         }
         if(ACtype%in%c("markov","markov2")){
           if(sexparms$sigma_t=="sex"){
@@ -2410,11 +2419,11 @@ SCRmcmcOpensex <-
     }  # end of MCMC algorithm
     if(storeLatent==TRUE){
       if(ACtype%in%c("markov","markov2","independent")){
-        list(out=out,s2xout=s2xout, s2yout=s2yout, zout=zout)
+        list(out=out,s2xout=s2xout, s2yout=s2yout, zout=zout,sexout=sexout)
       }else if(ACtype%in%c("metamu","metamu2")){
-        list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout)
+        list(out=out, s1xout=s1xout, s1yout=s1yout,s2xout=s2xout, s2yout=s2yout, zout=zout,sexout=sexout)
       }else{
-        list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout)
+        list(out=out, s1xout=s1xout, s1yout=s1yout, zout=zout,sexout=sexout)
       }
     }else{
       list(out=out)
