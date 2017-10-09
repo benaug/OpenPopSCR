@@ -3839,7 +3839,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
           }
           gammaprimecandM(l)=(Ntmp(l)*gamma(0)) / sumaM;
           gammaprimecandF(l)=(Ntmp(l)*gamma(1)) / sumaF;
-          if((gammaprimecandM(l) < 1) | (gammaprimecandF(l) < 1)){ //Is this a valid probability?
+          if((gammaprimecandM(l) > 1) | (gammaprimecandF(l) > 1)){ //Is this a valid probability?
             gamma_cand_ok=FALSE;
           }
           for(int i2=0; i2<M; i2++){
@@ -3970,13 +3970,15 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
                     ll_y_curr(swapsex(i),j,l)=ll_y_cand(swapsex(i),j,l);
                   }
                 }
+                ll_s2(swapsex(i),l)=ll_s2_cand(swapsex(i),l);
+              }
+              for(int l=0; l<(t-1); l++){
                 gammaprimeM(l)=gammaprimecandM(l);
                 gammaprimeF(l)=gammaprimecandF(l);
                 for(int i2=0; i2<M; i2++){
                   Ez(i2,l)=Ezcand(i2,l);
                   ll_z(i2,l+1)=ll_z_cand(i2,l+1);
                 }
-                ll_s2(swapsex(i),l)=ll_s2_cand(swapsex(i),l);
               }
             }
           }else{
@@ -3993,6 +3995,8 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
                     ll_y_curr(swapsex(i),j,l)=ll_y_cand(swapsex(i),j,l);
                   }
                 }
+              }
+              for(int l=0; l<(t-1); l++){
                 gammaprimeM(l)=gammaprimecandM(l);
                 gammaprimeF(l)=gammaprimecandF(l);
                 for(int i2=0; i2<M; i2++){
@@ -5843,7 +5847,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
   to_return[5] = zout;
   to_return[6] = sexout;
   to_return[7] = warncount;
-  to_return[8] = ll_s2;
-  to_return[9] = ll_s2_cand;
+  to_return[8] = swapsex;
+  to_return[9] = ll_sex_cand;
   return to_return;
 }
