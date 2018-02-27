@@ -84,7 +84,7 @@ SCRmcmcOpenRcpp <-
           idx=idx+1
         }
       }
-      xylim=rbind(apply(minmax,3,min),apply(minmax,3,max))
+      xylim=rbind(apply(minmax,3,min,na.rm=TRUE),apply(minmax,3,max,na.rm=TRUE))
       xlim=xylim[,1]+c(-buff,buff)
       ylim=xylim[,2]+c(-buff,buff)
       vertices=list(rbind(c(xlim[1],ylim[1]),c(xlim[1],ylim[2]),
@@ -288,11 +288,14 @@ SCRmcmcOpenRcpp <-
     #Initialize s1 and s2
     if(!usedSS){
       #make sure all traps are inside a polygon
+      #make sure all traps are inside a polygon
       for(l in 1:t){
         if(primary[l]==1){
           for(j in 1:J[l]){
-            if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
-              stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+            if(!is.na(X[[l]][j,1])){
+              if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
+                stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+              }
             }
           }
         }

@@ -59,7 +59,7 @@ build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary
   if(any(is.na(X))){
     stop("Must enter X")
   }
-  if(any(e2dist(X[[1]],X[[1]])>1000)){
+  if(any(e2dist(X[[1]],X[[1]])>1000,na.rm=TRUE)){
     warning("Are trap units in meters? Consider switching to km.")
   }
   if(!is.list(X)){
@@ -73,6 +73,9 @@ build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary
   }
   if(!obstype%in%c("bernoulli","poisson")){
     stop("obstype must be bernoulli or poisson")
+  }
+  if(any(unlist(lapply(X,function(x){any(is.na(x))})))){
+    stop("no missing values allowed in the trap locations")
   }
   J=unlist(lapply(X,nrow))
   maxJ=max(J)

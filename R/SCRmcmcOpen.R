@@ -77,7 +77,7 @@ SCRmcmcOpen <-
       idx=1
       for(l in 1:length(X)){
         if(primary[l]==1){
-          minmax[idx,,]=rbind(apply(X[[l]],2,min),apply(X[[l]],2,max))
+          minmax[idx,,]=rbind(apply(X[[l]],2,min,na.rm=TRUE),apply(X[[l]],2,max,na.rm=TRUE))
           idx=idx+1
         }
       }
@@ -289,8 +289,10 @@ SCRmcmcOpen <-
       for(l in 1:t){
         if(primary[l]==1){
           for(j in 1:J[l]){
-            if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
-              stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+            if(!is.na(X[[l]][j,1])){
+              if(!any(unlist(lapply(vertices,function(x){inout(X[[l]][j,],x)})))){
+                stop(paste("Trap",j,"in year",l,"is not in the state space!"))
+              }
             }
           }
         }
@@ -1158,14 +1160,18 @@ SCRmcmcOpen <-
           a.cand[i,]=aprop
           Ntmp=colSums(z.cand)
           ll.z.cand[i,1] <- dbinom(z.cand[i,1], 1, psi, log=TRUE)
+          reject=FALSE
           for(l in 2:t){
             gamma.prime.cand[l-1]=(Ntmp[l-1]*gammause[l-1]) / sum(a.cand[,l-1])
             if(gamma.prime.cand[l-1] > 1) { # E(Recruits) must be < nAvailable
-              warning("Rejected z due to low M")
-              next
+              reject=TRUE
             }
             Ez.cand[,l-1]=z.cand[,l-1]*phiuse[l-1] + a.cand[,l-1]*gamma.prime.cand[l-1]
             ll.z.cand[,l]=dbinom(z.cand[,l], 1, Ez.cand[,l-1], log=TRUE)
+          }
+          if(reject==TRUE){
+            warning("Rejected z due to low M")
+            next
           }
           #update ll.y
           for(l in 1:t){
@@ -1333,7 +1339,7 @@ SCRmcmcOpen <-
               }
               for(l in 1:t){
                 if(primary[l]==1){
-                  D[i,1:J[l], ] <- dtmp
+                  D[i,1:J[l], ] <- dtmp[1:J[l],l]
                   lamd[i,1:J[l], ] <- lamd.cand[i,1:J[l],]
                   if(obstype=="bernoulli"){
                     pd[i,1:J[l],]=pd.cand[i,1:J[l],]
