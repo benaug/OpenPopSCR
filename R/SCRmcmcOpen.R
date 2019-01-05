@@ -814,7 +814,9 @@ SCRmcmcOpen <-
           if(obstype=="bernoulli"){
             pd.cand=1-exp(-lamd.cand)
             for(l in 1:t){
+              if(primary[l]==1){
               ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE)
+              }
             }
           }else{
             for(l in 1:t){

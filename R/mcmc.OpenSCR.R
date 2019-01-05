@@ -360,8 +360,7 @@
 #' nburn=0
 #' nthin=1
 #' proppars=list(lam0=0.025,sigma=0.025,gamma=0.1,phi=0.1,s1x=0.2,s1y=0.2) #Need 1 more propz
-#' out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars,
-#' primary=primary)
+#' out=mcmc.OpenSCR(data,niter=niter,nburn=nburn, nthin=nthin, M =M, inits=inits,proppars=proppars)
 #' plot(mcmc(out$out))
 #' #Note that if lam0 and/or sigma are primary period-specific, you still need to enter starting values
 #' and tuning parameters, but these parameters are not updated. You can ignore them in the MCMC output.
