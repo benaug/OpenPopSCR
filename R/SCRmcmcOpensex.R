@@ -1,7 +1,8 @@
 SCRmcmcOpensex <-
   function(data,niter=2400,nburn=1200, nthin=5,M = 200, inits=inits,proppars=list(lam0=0.05,sigma=0.1,sx=0.2,sy=0.2),
            jointZ=TRUE,storeLatent=TRUE,ACtype="fixed",obstype="bernoulli",dSS=NA,dualACup=FALSE){
-    library(abind)
+
+   library(abind)
     t=dim(data$y)[3]
     y<-data$y
     X<-data$X
@@ -823,7 +824,6 @@ SCRmcmcOpensex <-
     if(!is.finite(ll.y.sum)){
       stop("Detection function starting values produce -Inf log likelihood values. Try increasing sigma and/or lam0")
     }
-
     if(jointZ==TRUE){
       #Figure out all possible z histories
       zpossible=cbind(c(1,1,0),c(1,0,1))
@@ -1604,13 +1604,13 @@ SCRmcmcOpensex <-
               if(primary[l]==1){
                 dtmp[1:J[l],l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
                 if(length(lam0)==1&length(sigma)==1){
-                  lamd.cand[i,1:J[l],]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
                 }else if(length(lam0)==2&length(sigma)==1){
-                  lamd.cand[i,1:J[l],]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                  lamd.cand[i,1:J[l],l]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
                 }else if(length(lam0)==1&length(sigma)==2){
-                  lamd.cand[i,1:J[l],]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
+                  lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 }else{
-                  lamd.cand[i,1:J[l],]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
+                  lamd.cand[i,1:J[l],l]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
                 }
                 if(obstype=="bernoulli"){
                   pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
@@ -1624,7 +1624,7 @@ SCRmcmcOpensex <-
             }
             if(runif(1) < exp(sum(ll.y.cand[i,,]) -sum(ll.y[i,,]))*MHratio){
               s1[i, ]=Scand
-              s2[i,,]=rep(Scand,t)
+              s2[i,,]=matrix(rep(Scand,t),byrow=TRUE,ncol=2)
               for(l in 1:t){
                 if(primary[l]==1){
                   D[i,1:J[l],l] <- dtmp[1:J[l],l]
@@ -1937,13 +1937,13 @@ SCRmcmcOpensex <-
                 if(primary[l]==1){
                   dtmp[1:J[l],l] <- sqrt((Scand[1] - X[[l]][, 1])^2 + (Scand[2] - X[[l]][, 2])^2)
                   if(length(lam0)==1&length(sigma)==1){
-                    lamd.cand[i,1:J[l],]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                    lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
                   }else if(length(lam0)==2&length(sigma)==1){
-                    lamd.cand[i,1:J[l],]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
+                    lamd.cand[i,1:J[l],l]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma*sigma))
                   }else if(length(lam0)==1&length(sigma)==2){
-                    lamd.cand[i,1:J[l],]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
+                    lamd.cand[i,1:J[l],l]<- lam0*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
                   }else{
-                    lamd.cand[i,1:J[l],]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
+                    lamd.cand[i,1:J[l],l]<- lam0[sex[i]]*exp(-dtmp[1:J[l],l]*dtmp[1:J[l],l]/(2*sigma[sex[i]]*sigma[sex[i]]))
                   }
                   if(obstype=="bernoulli"){
                     pd.cand[i,1:J[l],l]=1-exp(-lamd.cand[i,1:J[l],l])
