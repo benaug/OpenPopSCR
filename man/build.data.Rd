@@ -39,6 +39,9 @@ entry with 1 indicating male, 2 female, and NA unknown.}
 \item{tf}{an optional list of vectors of length t containing the trap operation information.  Each vector has one element for each trap
 and indicates how many occasions each trap was operational in that primary period.}
 }
+\description{
+Format "secr-like" data for use in mcmc.OpenSCR or mcmc.OpenSCR.sex
+}
 \examples{
 \dontrun{
 #simulate some data

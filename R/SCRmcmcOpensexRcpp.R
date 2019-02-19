@@ -108,7 +108,12 @@ SCRmcmcOpensexRcpp <-
         tf[[l]]=rep(K[l],nrow(X[[l]]))
       }
     }
-
+    #make tf into matrix
+    for(l in 1:t){
+      if(primary[l]==1){
+        tf[[l]]=matrix(rep(tf[[l]],M),ncol=J[l],nrow=M,byrow=TRUE)
+      }
+    }
     ##pull out initial values
     lam0<- inits$lam0
     sigma<- inits$sigma
@@ -830,7 +835,7 @@ SCRmcmcOpensexRcpp <-
     tf2=matrix(0,nrow=maxJ,ncol=t)
     for(l in 1:t){
       if(primary[l]==1){
-        tf2[1:J[l],l]=tf[[l]]
+        tf2[1:J[l],l]=tf[[l]][1,]
       }
     }
     if(!usedSS){

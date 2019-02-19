@@ -7,9 +7,10 @@ Maintainer: Ben Augustine <baugusti@vt.edu>
 Description: This package implements various open population SCR algorithms in R and Rcpp.  Current features include
     any combination of fixed or year-specific parameters, (potentially multiple) polygonal state spaces, trap operation files, discrete state spaces, bernoulli or poisson observation models, and multiple between year activity center models.  Sex-specific parameters with potentially some missing sexes are available in mcmc.OpenSCR.sex().
     The advantages of this package over using JAGS are ease of use, not needing to know how to code in JAGS, and much faster computation.  The disadvantage is that you might want to do something not currently in the package that you can do in JAGS.  If this is the case, send me an email.
-    The main MCMC functions are mcmc.OpenSCR and mcmc.OpenSCR.sex where there are help file with examples.
+    The main MCMC functions are mcmc.OpenSCR and mcmc.OpenSCR.sex where there are help file with examples. Using this package requires
+    experience using custom MCMC algorithms. If you do not have this experience, I suggest emailing me to discuss using the package. 
 License: GPL-2
 LazyData: TRUE
 Imports: Rcpp (>= 0.12.3), RcppArmadillo (>= 0.6.600.4.0),abind
 LinkingTo: Rcpp, RcppArmadillo
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0
