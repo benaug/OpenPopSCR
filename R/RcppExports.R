@@ -2,14 +2,14 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 inoutCppOpen <- function(sx, sy, vertices) {
-    .Call('OpenPopSCR_inoutCppOpen', PACKAGE = 'OpenPopSCR', sx, sy, vertices)
+    .Call('_OpenPopSCR_inoutCppOpen', PACKAGE = 'OpenPopSCR', sx, sy, vertices)
 }
 
 mcmc_Open <- function(lam0in, sigmain, gammain, gammaprime, phiin, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, s2cell, s1cell, dSS, usedSS, primary, dualACup, propdualAC, distances, storeLatent) {
-    .Call('OpenPopSCR_mcmc_Open', PACKAGE = 'OpenPopSCR', lam0in, sigmain, gammain, gammaprime, phiin, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, s2cell, s1cell, dSS, usedSS, primary, dualACup, propdualAC, distances, storeLatent)
+    .Call('_OpenPopSCR_mcmc_Open', PACKAGE = 'OpenPopSCR', lam0in, sigmain, gammain, gammaprime, phiin, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, s2cell, s1cell, dSS, usedSS, primary, dualACup, propdualAC, distances, storeLatent)
 }
 
 mcmc_Open_sex <- function(lam0in, sigmain, gammain, gammaprimeM, gammaprimeF, phiin, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex, primary, s2cell, s1cell, dualACup, propdualAC, distances, storeLatent) {
-    .Call('OpenPopSCR_mcmc_Open_sex', PACKAGE = 'OpenPopSCR', lam0in, sigmain, gammain, gammaprimeM, gammaprimeF, phiin, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex, primary, s2cell, s1cell, dualACup, propdualAC, distances, storeLatent)
+    .Call('_OpenPopSCR_mcmc_Open_sex', PACKAGE = 'OpenPopSCR', lam0in, sigmain, gammain, gammaprimeM, gammaprimeF, phiin, psex, D, lamd, y, z, a, s1, s2, ACtype, useverts, vertices, xlim, ylim, sex, knownmatrix, Xidx, Xcpp, K, Ez, psi, N, proplam0, propsig, propz, propgamma, props1x, props1y, props2x, props2y, propsigma_t, propsex, sigma_tin, niter, nburn, nthin, npar, each, jointZ, zpossible, apossible, cancel, obstype, tf, dSS, usedSS, sexparms, choosesex, primary, s2cell, s1cell, dualACup, propdualAC, distances, storeLatent)
 }
 

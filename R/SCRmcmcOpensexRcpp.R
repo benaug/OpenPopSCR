@@ -759,6 +759,9 @@ SCRmcmcOpensexRcpp <-
           }
         }
       }
+    }else{
+      zpossible=apossible=cancel=matrix(0,nrow=2,ncol=2)
+
     }
     #sex ll
     nmale=sum(sex[known.sex==1&z[,1]==1]==1)
@@ -883,7 +886,9 @@ SCRmcmcOpensexRcpp <-
     zout=store[[6]]
     sexout=store[[7]]
     warn=store[[8]]
-
+    if(warn>0){
+      warning(paste("gamma proposal led to gamma prime >1",warn,"times. May want to raise M"))
+    }
     # llzout=store[[8]]
     # storeupz=store[[14]]
     # storeswapz=store[[15]]
