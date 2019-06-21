@@ -3848,6 +3848,9 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
     // //update sexes
     swapsex=Rcpp::RcppArmadillo::sample(choosesex,propsex,FALSE);//choosesex only contains latent guys
     for(int i=0; i<propsex; i++){
+      for(int i2=0; i2<M; i2++){
+        sex_cand(i2)=sex(i2);
+      }
       if(sex(swapsex(i))==1){
         sex_cand(swapsex(i))=2;
       }else{
@@ -3901,12 +3904,12 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
         }
         for(int i2=0; i2<M; i2++){
           //Add on contributions to z ll from l+1 for cand and curr
-          if(sex(i2)==1){
-            Ezcand(i2,l) = zcand(i2,l)*phi(0) + acand(i2,l)*gammaprimecandM(l);
+          if(sex_cand(i2)==1){
+            Ezcand(i2,l) = z(i2,l)*phi(0) + a(i2,l)*gammaprimecandM(l);
           }else{
-            Ezcand(i2,l) = zcand(i2,l)*phi(1) + acand(i2,l)*gammaprimecandF(l);
+            Ezcand(i2,l) = z(i2,l)*phi(1) + a(i2,l)*gammaprimecandF(l);
           }
-          ll_z_cand(i2,l+1) = R::dbinom(zcand(i2,l+1),1,Ezcand(i2,l),TRUE);
+          ll_z_cand(i2,l+1) = R::dbinom(z(i2,l+1),1,Ezcand(i2,l),TRUE);
           llzsum+=ll_z(i2,l+1);//prior.z
           llzcandsum+=ll_z_cand(i2,l+1);//prior.z.cand
         }
@@ -4012,7 +4015,7 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
             }
           }
           rand=Rcpp::runif(1);
-          if(rand(0)<exp((ll_sex_cand(swapsex(i))+llycandsum+llzcandsum+lls2candsum)-(ll_sex(swapsex(i))+llysum+llzsum)+lls2sum)){
+          if(rand(0)<exp((ll_sex_cand(swapsex(i))+llycandsum+llzcandsum+lls2candsum)-(ll_sex(swapsex(i))+llysum+llzsum+lls2sum))){
             sex(swapsex(i))=sex_cand(swapsex(i));
             for(int l=0; l<t; l++){
               if(primary(l)){
@@ -4089,12 +4092,12 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
       ll_sex(i)=R::dbinom(sex(i)-1,1,psex,TRUE);
     }
     //Update phi
-    if(sexparms(2)){//if time-specific survival
+    if(sexparms(2)){//if sex-specific survival
+      surviveM=0;
+      surviveF=0;
+      deadM=0;
+      deadF=0;
       for(int l=1; l<t; l++){
-        surviveM=0;
-        surviveF=0;
-        deadM=0;
-        deadF=0;
         for(int i=0; i<M; i++){
           if(sex(i)==1){
             surviveM+=(z(i,l-1)==1)&(z(i,l)==1);
@@ -4104,17 +4107,17 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
             deadF+=(z(i,l-1)==1)&(z(i,l)==0);
           }
         }
-        rand=Rcpp::rbeta(1, 1+surviveM, 1+deadM);
-        phi(0)=rand(0);
-        rand=Rcpp::rbeta(1, 1+surviveF, 1+deadF);
-        phi(1)=rand(0);
       }
+      rand=Rcpp::rbeta(1, 1+surviveM, 1+deadM);
+      phi(0)=rand(0);
+      rand=Rcpp::rbeta(1, 1+surviveF, 1+deadF);
+      phi(1)=rand(0);
     }else{
+      surviveM=0;
+      surviveF=0;
+      deadM=0;
+      deadF=0;
       for(int l=1; l<t; l++){
-        surviveM=0;
-        surviveF=0;
-        deadM=0;
-        deadF=0;
         for(int i=0; i<M; i++){
           if(sex(i)==1){
             surviveM+=(z(i,l-1)==1)&(z(i,l)==1);
@@ -4124,10 +4127,10 @@ List mcmc_Open_sex(NumericVector lam0in, NumericVector sigmain, NumericVector ga
             deadF+=(z(i,l-1)==1)&(z(i,l)==0);
           }
         }
-        rand=Rcpp::rbeta(1, 1+surviveM+surviveF, 1+deadM+deadF);
-        phi(0)=rand(0);
-        phi(1)=rand(0);
       }
+      rand=Rcpp::rbeta(1, 1+surviveM+surviveF, 1+deadM+deadF);
+      phi(0)=rand(0);
+      phi(1)=rand(0);
     }
     //  Update gamma
     if(sexparms(3)==FALSE){//fixed
