@@ -56,9 +56,6 @@
 #'@export
 build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary=NA,sex=NA,tf=NA){
   #entry check
-  if(any(is.na(X))){
-    stop("Must enter X")
-  }
   if(any(e2dist(X[[1]],X[[1]])>1000,na.rm=TRUE)){
     warning("Are trap units in meters? Consider switching to km.")
   }
@@ -74,11 +71,9 @@ build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary
   if(!obstype%in%c("bernoulli","poisson")){
     stop("obstype must be bernoulli or poisson")
   }
-  if(any(unlist(lapply(X,function(x){any(is.na(x))})))){
-    stop("no missing values allowed in the trap locations")
-  }
-  J=unlist(lapply(X,nrow))
-  maxJ=max(J)
+  # if(any(unlist(lapply(X,function(x){any(is.na(x))})))){
+  #   stop("no missing values allowed in the trap locations")
+  # }
   n=max(dataIn[,1])
   if(ncol(dataIn)==4){
     t=max(dataIn[,3])
@@ -86,6 +81,14 @@ build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary
     t=max(dataIn[,4])
   }
   nobs=nrow(dataIn)
+  J=rep(NA,t)
+  for(tt in 1:t){
+    if(!all(is.na(X[[tt]]))){
+      J[tt]=nrow(X[[tt]])
+    }
+  }
+  # J=unlist(lapply(X,nrow))
+  maxJ=max(J,na.rm=TRUE)
   if(length(J)!=t){
     stop("J must be of length t")
   }
@@ -136,7 +139,7 @@ build.data=function(dataIn=NA,X=NA, K=NA, obstype=NA,buff=NA,vertices=NA,primary
     if(any(primary[unique(dataIn[,3])]==0)){
       stop("observations recorded in year with primary=0")
     }
-    if(any(is.na(X)&primary==0)){
+    if(any(!is.na(X)&primary==0)){
       stop("Traps entered for primary=0 period. Switch to NA.")
     }
   }else{
