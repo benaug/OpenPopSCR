@@ -60,9 +60,9 @@ DerivedValues=function(N,gamma,phi,psi,M,extrap=0){
     lambda[,l-1]=N[,l]/N[,l-1]
   }
   if(extrap>0){
-    EN=matrix(NA,ncol=extrap,nrow=iters)
+    EN2=matrix(NA,ncol=extrap,nrow=iters)
     #extrap period 1
-    EN2[,l]=EN[,t]*(phi[,l-1]+gamma[,l-1])
+    EN2[,1]=EN[,t]*(phi[,l-1]+gamma[,l-1])
     if(extrap>1){
       for(l in 2:extrap){
         EN2[,l]=EN2[,l-1]*(phi[,l-1]+gamma[,l-1])
