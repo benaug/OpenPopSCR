@@ -989,13 +989,9 @@ SCRmcmcOpensex <-
               }
               if(obstype=="bernoulli"){
                 pd.cand[,1:J[l],l]=1-exp(-lamd.cand[,1:J[l],l])
-                for(l in 1:t){
-                  ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE)
-                }
+                ll.y.cand[,1:J[l],l]= dbinom(y[,1:J[l],l],tf[[l]],pd.cand[,1:J[l],l]*z[,l],log=TRUE)
               }else{
-                for(l in 1:t){
-                  ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
-                }
+                ll.y.cand[,1:J[l],l]= dpois(y[,1:J[l],l],tf[[l]]*lamd.cand[,1:J[l],l]*z[,l],log=TRUE)
               }
             }
           }
